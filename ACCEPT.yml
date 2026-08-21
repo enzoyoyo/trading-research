@@ -1,0 +1,10 @@
+version: 1
+skill: trading-research
+acceptance:
+  command: python3 scripts/validate_skill.py --all
+  expected_exit_code: 0
+  guarantees:
+    - isolated_home_per_child
+    - isolated_trading_memory_db_per_child
+    - network_disabled
+    - no_order_execution

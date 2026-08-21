@@ -1,0 +1,11 @@
+{"query":"TSLA","market":"US","symbol":"TSLA","longbridge_symbol":"TSLA.US"}
+{"query":"BRK.B","market":"US","symbol":"BRK.B","longbridge_symbol":"BRK.B.US"}
+{"query":"300846","market":"A","symbol":"300846","longbridge_symbol":"300846.SZ"}
+{"query":"300846.SZ","market":"A","symbol":"300846","longbridge_symbol":"300846.SZ"}
+{"query":"600519.SH","market":"A","symbol":"600519","longbridge_symbol":"600519.SH"}
+{"query":"688256","market":"A","symbol":"688256","longbridge_symbol":"688256.SH"}
+{"query":"00700","market":"HK","symbol":"00700","longbridge_symbol":"00700.HK"}
+{"query":"700.HK","market":"HK","symbol":"00700","longbridge_symbol":"00700.HK"}
+{"query":"09988.HK","market":"HK","symbol":"09988","longbridge_symbol":"09988.HK"}
+{"query":"腾讯","market":"HK","symbol":"00700","longbridge_symbol":"00700.HK"}
+{"query":"新易盛","market":"A","symbol":"300502","longbridge_symbol":"300502.SZ"}

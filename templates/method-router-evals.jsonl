@@ -1,0 +1,7 @@
+{"args":{"market":"A","horizon":"short","theme":"连板 龙虎榜 涨停 退潮"},"expect_scenario":"A_short","must_weight_gte":{"youzi_emotion":25,"wyckoff":18},"weights_sum":100}
+{"args":{"market":"US","horizon":"swing","theme":"RKLB options gamma put wall","options_heavy":true},"expect_scenario":"US_options_gamma","must_weight_gte":{"options_gamma":18,"poisson":10},"weights_sum":100}
+{"args":{"market":"US","horizon":"swing","theme":"VIX 暴涨 黄金 AAPL 长端利率 skew gex 杀杠杆","macro_policy":true},"expect_scenario":"US_deleveraging","must_macro_policy_context":true,"must_weight_gte":{"macro_policy_news_account":25,"options_gamma":18},"weights_sum":100}
+{"args":{"market":"US","horizon":"swing","theme":"Fed policy macro liquidity earnings guidance","macro_policy":true},"must_macro_policy_context":true,"must_weight_gte":{"macro_policy_news_account":20},"weights_sum":100}
+{"args":{"market":"HK","horizon":"swing","theme":"腾讯 南向 流动性 政策"},"expect_scenario":"HK","must_weight_gte":{"macro_policy_news_account":18},"weights_sum":100}
+{"args":{"market":"US","horizon":"swing","theme":"pair trade crowding passive flow ipo lockup secondary bull gross margin","macro_policy":true},"expect_scenario":"US_flow_rotation","must_macro_policy_context":true,"must_weight_gte":{"endogenous_microstructure":20,"macro_policy_news_account":18},"weights_sum":100}
+{"args":{"market":"US","horizon":"swing","theme":"early-stage AI optical CPO supply chain pre-revenue emerging technology"},"expect_scenario":"US_early_theme","must_weight_gte":{"early_stage_quality":18,"supply_chain_xray":13},"weights_sum":100}

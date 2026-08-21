@@ -1,0 +1,694 @@
+{
+  "schema_version": "research_provenance.v1",
+  "as_of": "2026-08-01T19:36:38Z",
+  "bundle_purpose": {"kind":"kol_method_handoff","target_ids":["KMC-BALDER-20260731-FINAL"],"scope":"One supplied 2026-07-31 Substack email and its single semantic image; no author-wide extrapolation.","decision_use":"watch_only","claim_coverage":"bounded_single_article"},
+  "claim_coverage": {"source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"framework_claim_ids":["FC-BAL-01","FC-BAL-02","FC-BAL-03","FC-BAL-04"],"analysis_claim_ids":["AC-BAL-01","AC-BAL-02","AC-BAL-03","AC-BAL-04"],"accepted_claim_ids":[],"watch_only_claim_ids":["AC-BAL-01","AC-BAL-04"],"context_only_claim_ids":["AC-BAL-02","AC-BAL-03"],"rejected_claim_ids":[],"canonical_eids":[],"target_binding":"KMC-BALDER-20260731-FINAL","reason":"The source is partial, the canonical public DOM is unverified, and no canonical EvidenceItem IDs or independently reproducible signal inputs exist."},
+  "research_readiness": {"depth_mode":"deep_dive","information_value":"medium","knowability_status":"partially_knowable","readiness_level":"needs_refresh","readiness_basis":"The public method skeleton is source-grounded, but benchmark, formula, thresholds, publication origin, trade semantics, and independent outcome evidence are missing or conflicted.","blocking_gaps":["canonical public DOM parity is unverified","benchmark and relative-strength formula are undisclosed","tracking inclusion/removal is not verified trade entry/exit","no canonical EvidenceItem IDs or independent outcome ledger","MRVL and NFLX state labels conflict between prose and image"],"stale_after":"2026-08-01T22:11:43Z","must_refresh_if":["a canonical article capture or correction becomes available","the author publishes the benchmark, formula, thresholds, or confirmation-state definitions","independent point-in-time market data or transaction evidence becomes available","any later source resolves the prose/image state conflict"],"max_action_level_cap":"L0","module_signal":{"module":"research_readiness","max_action_level":"L0","position_multiplier":0.0,"hard_veto":false,"tighten_only":true,"reason":"needs_refresh:partial_single_article_and_nonreproducible_signal"}},
+  "source_capture_manifest": [{"document_id":"DOC-BALDER-2026-07-31","content_sha256":"93894cf3d46129c89edb12b4a317ef8afd095b420d128de37449f80c64de7469","media_type":"text/plain","source_role":"semantic","disposition":"private_capture_not_distributed","review_locator":"review-index:L-01..L-32","supported_claim_ids":["AC-BAL-01","AC-BAL-02","AC-BAL-04"],"quote_anchor_ids":["Q-BAL-01","Q-BAL-02","Q-BAL-03","Q-BAL-04","Q-BAL-05","Q-BAL-06","Q-BAL-07"],"quote_locators":{"Q-BAL-01":{"review_index":"L-01"},"Q-BAL-02":{"review_index":"L-04"},"Q-BAL-03":{"review_index":"L-06a"},"Q-BAL-04":{"review_index":"L-06b"},"Q-BAL-05":{"review_index":"L-07"},"Q-BAL-06":{"review_index":"L-09"},"Q-BAL-07":{"review_index":"L-11"}}},{"document_id":"DOC-BALDER-IMG-08","content_sha256":"a13382d6c26c793a145ad3690dd3eb321c751ce4ac489cc70c3dd8065900ea81","media_type":"image/png","dimensions":{"width":2000,"height":2180},"source_role":"semantic","disposition":"private_image_capture_not_distributed","review_locator":"review-index:IMG-08","supported_claim_ids":["AC-BAL-01","AC-BAL-03"]}],
+  "source_documents": [
+    {
+      "document_id": "KOL-SRC-C3",
+      "source_type": "x_post",
+      "title": "Portfolio-as-position and drawdown triad",
+      "publisher": "@citrini",
+      "author": "@citrini",
+      "published_at": "2026-07-14",
+      "published_time_precision": "date_only",
+      "retrieved_at": "2026-07-17T10:03Z",
+      "original_url": "https://x.com/citrini/status/2076891040343072975",
+      "access_state": "public",
+      "license_scope": "unknown",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "unknown"
+    },
+    {
+      "document_id": "KOL-SRC-C7",
+      "source_type": "substack_note",
+      "title": "Curve-flattener note with self-reported outcome",
+      "publisher": "@citrini",
+      "author": "@citrini",
+      "published_at": "2026-06-28",
+      "published_time_precision": "date_only",
+      "retrieved_at": "2026-07-17T10:03Z",
+      "original_url": "https://substack.com/@citrini/note/c-284380995",
+      "access_state": "public",
+      "license_scope": "unknown",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "unknown"
+    },
+    {
+      "document_id": "KOL-SRC-C8",
+      "source_type": "research_article",
+      "title": "State of the Themes, June 2026",
+      "publisher": "Citrini Research",
+      "author": "@citrini",
+      "published_at": "2026-06-08",
+      "published_time_precision": "date_only",
+      "retrieved_at": "2026-07-17T10:03Z",
+      "original_url": "https://www.citriniresearch.com/p/state-of-the-themes-june-2026",
+      "access_state": "subscriber_only",
+      "license_scope": "unknown",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "unknown"
+    },
+    {
+      "document_id": "KOL-SRC-C9",
+      "source_type": "x_post",
+      "title": "Directionally correct thesis with failed timing",
+      "publisher": "@citrini",
+      "author": "@citrini",
+      "published_at": "2026-06-22",
+      "published_time_precision": "date_only",
+      "retrieved_at": "2026-07-17T10:03Z",
+      "original_url": "https://x.com/citrini/status/2069090305870115131",
+      "access_state": "public",
+      "license_scope": "unknown",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "unknown"
+    },
+    {
+      "document_id": "KOL-SRC-B1",
+      "source_type": "x_post",
+      "title": "Daily SPX gamma, walls, range and VRP map",
+      "publisher": "@Balder13946731",
+      "author": "@Balder13946731",
+      "published_at": "2026-07-16",
+      "published_time_precision": "date_only",
+      "retrieved_at": "2026-07-17T10:03Z",
+      "original_url": "https://x.com/Balder13946731/status/2077755188291756213",
+      "access_state": "public",
+      "license_scope": "unknown",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "unknown"
+    },
+    {
+      "document_id": "KOL-SRC-B5",
+      "source_type": "x_post",
+      "title": "Yesterday's verdict and self-reported book grading",
+      "publisher": "@Balder13946731",
+      "author": "@Balder13946731",
+      "published_at": "2026-07-13",
+      "published_time_precision": "date_only",
+      "retrieved_at": "2026-07-17T10:03Z",
+      "original_url": "https://x.com/Balder13946731/status/2076675543593087321",
+      "access_state": "public",
+      "license_scope": "unknown",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "unknown"
+    },
+    {
+      "document_id": "KOL-SRC-B6",
+      "source_type": "x_post",
+      "title": "Expected move and side-trade around earnings",
+      "publisher": "@Balder13946731",
+      "author": "@Balder13946731",
+      "published_at": "2026-07-16",
+      "published_time_precision": "date_only",
+      "retrieved_at": "2026-07-17T10:03Z",
+      "original_url": "https://x.com/Balder13946731/status/2077815613112897882",
+      "access_state": "public",
+      "license_scope": "unknown",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "unknown"
+    },
+    {
+      "document_id": "KOL-SRC-F1",
+      "source_type": "substack_weekly",
+      "title": "2026-07-13 weekly strategy review",
+      "publisher": "Frank Trading",
+      "author": "@Franktradinglog",
+      "published_at": "2026-07-13",
+      "published_time_precision": "date_only",
+      "retrieved_at": "2026-07-17T10:03Z",
+      "original_url": "https://franktrading.substack.com/p/07132026",
+      "access_state": "partial",
+      "license_scope": "unknown",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "unknown"
+    },
+    {
+      "document_id": "KOL-SRC-F4",
+      "source_type": "x_post",
+      "title": "Self-reported option outcome",
+      "publisher": "@Franktradinglog",
+      "author": "@Franktradinglog",
+      "published_at": "2026-07-15",
+      "published_time_precision": "date_only",
+      "retrieved_at": "2026-07-17T10:03Z",
+      "original_url": "https://x.com/Franktradinglog/status/2077397261919855064",
+      "access_state": "public",
+      "license_scope": "unknown",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "unknown"
+    },
+    {
+      "document_id": "KOL-SRC-F8",
+      "source_type": "x_post",
+      "title": "Compute monetization thesis and semiconductor gap invalidation",
+      "publisher": "@Franktradinglog",
+      "author": "@Franktradinglog",
+      "published_at": "2026-07-01",
+      "published_time_precision": "date_only",
+      "retrieved_at": "2026-07-17T10:03Z",
+      "original_url": "https://x.com/Franktradinglog/status/2072428625685786711",
+      "access_state": "public",
+      "license_scope": "unknown",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "unknown"
+    },
+    {
+      "document_id": "KOL-SRC-F9",
+      "source_type": "x_post",
+      "title": "Passive-flow risk and gradual dip buying",
+      "publisher": "@Franktradinglog",
+      "author": "@Franktradinglog",
+      "published_at": "2026-06-21",
+      "published_time_precision": "date_only",
+      "retrieved_at": "2026-07-17T10:03Z",
+      "original_url": "https://x.com/Franktradinglog/status/2068843747182625171",
+      "access_state": "public",
+      "license_scope": "unknown",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "unknown"
+    },
+    {"document_id":"DOC-BALDER-2026-07-31","source_type":"primary_document","title":"Balder's Position · 2026-07-31","publisher":"Balder's Substack","author":"Balder","published_at":"2026-07-31T22:11:43.278Z","published_time_precision":"exact","retrieved_at":"2026-08-01T19:36:38Z","original_url":"https://baldertrader.substack.com/p/balders-position-2026-07-31","content_sha256":"93894cf3d46129c89edb12b4a317ef8afd095b420d128de37449f80c64de7469","license_scope":"user_provided","storage_scope":"tracked_allowed","redistribution_allowed":"derived_only","access_state":"partial","identity_note":"The captured Substack profile is @balder714059. Its relationship to the pre-existing X handle @Balder13946731 was not reverified and is not used to merge method cards.","publication_time_status":"source_stated_unverified_not_executable_origin","capture_bytes_storage_scope":"private","media_type":"text/plain"},
+    {"document_id":"DOC-BALDER-IMG-08","source_type":"primary_image","title":"Balder 2026-07-31 semantic holdings card","publisher":"Balder's Substack","author":"Balder","published_at":"2026-07-31T22:11:15Z","published_time_precision":"exact","retrieved_at":"2026-08-01T19:36:38Z","original_url":"https://substack-post-media.s3.amazonaws.com/public/images/5495b4bb-b761-4756-b967-e9ad4fe7d3d1_2000x2180.png","content_sha256":"a13382d6c26c793a145ad3690dd3eb321c751ce4ac489cc70c3dd8065900ea81","license_scope":"user_provided","storage_scope":"tracked_allowed","redistribution_allowed":"derived_only","access_state":"partial","derived_from_document_id":"DOC-BALDER-2026-07-31","publication_time_status":"source_header_last_modified_unverified_not_executable_origin","capture_bytes_storage_scope":"private","media_type":"image/png"}
+  ],
+  "quote_anchors": [{"quote_id":"Q-BAL-01","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"量子计算板块个股的相对强度信号开始转强，IONQ 本期首次进入跟踪范围；而此前纳入观察的 CRCL、ARM 超额收益信号均已转弱，予以移出。","locator":{"review_index":"L-01"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"2872308ebbb506cc1d11a293fa65d83ffde9e9f2faf8fadcaefcf526b09272fe"},{"quote_id":"Q-BAL-02","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"本刊量化引擎监测到该标的相对大盘的超额收益信号首次转强，10 日相对强度读数为 87bp，当前确认档位处于第 0 档","locator":{"review_index":"L-04"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"8b62d41f578e50acbe77fd2fdf4abaada72c0a4fc7066b69ebab1f6474bd57bc"},{"quote_id":"Q-BAL-03","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"一旦有效跌破，下一支撑参考位下移至 31.8，意味着本轮相对强度信号面临证伪","locator":{"review_index":"L-06a"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"4741baf868941da15508213cd6da8b4ac54eca824248132dbb138fcd88d3e4f8"},{"quote_id":"Q-BAL-04","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"若能放量有效突破 38，将是确认档位上调的技术前提","locator":{"review_index":"L-06b"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"a5bff368f3e3c5137432747a5b6abebac1057a8a4e7fca4224d757b3526ffa15"},{"quote_id":"Q-BAL-05","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"尚不构成趋势确认，建议以谨慎跟踪为主，等待确认档位进一步上移或关键位方向明确后再行评估","locator":{"review_index":"L-07"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"210baa5868d50e28552f22247556475a861c132c70e57c0dc7ab5f7891547fb1"},{"quote_id":"Q-BAL-06","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"本期相对强度未见显著边际变化，维持观察，暂不做方向性调整","locator":{"review_index":"L-09"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"a17842ae5b73527915e2fe8a4ce883825a0f0b6f4e859b9f07daacbc8e1d3c81"},{"quote_id":"Q-BAL-07","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"因超额收益信号转弱，移出组合","locator":{"review_index":"L-11"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"172c7bcb06d6b26bdf130d116b430b2c29307f57285a454b2899fba346d7464c"}],
+  "framework_claims": [{"framework_claim_id":"FC-BAL-01","statement":"The disclosed article can be represented as a relative-signal observation, an ordinal confirmation state, and tracking-state transitions, but it cannot be parameterized from this article.","quote_anchor_ids":["Q-BAL-01","Q-BAL-02","Q-BAL-04","Q-BAL-05"],"derivation_note":"The article names a benchmark-relative signal, tier zero, a necessary upgrade condition, and cautious tracking/removal language. The benchmark, formula, thresholds, state count, and transition windows are absent.","scope":"Descriptive reconstruction of the 2026-07-31 public article only; not a trade or forecasting specification.","status":"mixed","counterevidence_status":"mixed","counterevidence_refs":["L-03","L-14","L-16","PF01","PF02","PF03","PF15"]},{"framework_claim_id":"FC-BAL-02","statement":"An absolute-price barrier cannot independently falsify a benchmark-relative signal unless a conversion rule or same-unit signal criterion is disclosed.","quote_anchor_ids":["Q-BAL-02","Q-BAL-03"],"derivation_note":"The entry observation is expressed in benchmark-relative basis points, while the stated invalidation reference is an absolute price. Both can move in opposite directions during a market-wide move.","scope":"Evidence-quality and falsifier-consistency guardrail; it does not create a stop, target, or action rule.","status":"supported","counterevidence_status":"searched_none_found","counterevidence_refs":["L-14","final-methodology-review:F-05","PF13"]},{"framework_claim_id":"FC-BAL-03","statement":"When the source reports no material signal change, its disclosed default posture is to keep observing and avoid a directional upgrade.","quote_anchor_ids":["Q-BAL-05","Q-BAL-06"],"derivation_note":"The conclusion and continued-tracking paragraph both map uncertainty or no change to observation rather than escalation.","scope":"Conservative research posture only; the undefined words material, effective, and confirmed prevent mechanical replay.","status":"supported","counterevidence_status":"searched_none_found","counterevidence_refs":["L-08","L-16","PF16"]},{"framework_claim_id":"FC-BAL-04","statement":"The article exposes an event-level review field set, but two source-stated removals and an open-name dashboard do not establish a calibrated exit process or performance edge.","quote_anchor_ids":["Q-BAL-01","Q-BAL-07"],"derivation_note":"The source reports inclusion/removal dates, reference prices, elapsed-day labels, returns, and stated reasons. The image contains only open names, and no independent fills, denominator, benchmark, probability, or calibration protocol exists.","scope":"Method-card documentation and future hypothesis design only; no Decision, Hypothesis, or Event Memory write is authorized by this bundle.","status":"mixed","counterevidence_status":"mixed","counterevidence_refs":["L-20","L-22","L-23","L-28","PF18","PF19","NF02","NF03"],"evidence_source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"]}],
+  "analysis_claims": [{"claim_id":"AC-BAL-01","statement":"The source says it tracks benchmark-relative signal-state changes; tracking inclusion/removal is not verified trade entry/exit.","provenance_mode":"source_summary","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":["Q-BAL-01","Q-BAL-02","Q-BAL-07"],"framework_claim_ids":[],"evidence_refs":[],"decision_use":"watch_only","counterevidence_status":"mixed","counterevidence_refs":["IMG-08:HOLDINGS/OPEN wording","PF17"],"falsifier":"Independent transaction or account evidence showing the disclosed labels are actual fills would change, but not automatically validate, the execution interpretation."},{"claim_id":"AC-BAL-02","statement":"The signal-state and trigger vocabulary is portable only as a research hypothesis and KOL handoff, not as a score, action module, or threshold set.","provenance_mode":"framework_inference","source_document_ids":["DOC-BALDER-2026-07-31"],"quote_anchor_ids":[],"framework_claim_ids":["FC-BAL-01","FC-BAL-03"],"evidence_refs":[],"decision_use":"context_only","counterevidence_status":"searched_none_found","counterevidence_refs":["forecast-reconstruction-ledger:all-20-records-reproducibility-fail"],"falsifier":"A complete public formula, frozen universe, benchmark, thresholds, horizon, and point-in-time replay could support a stronger future handoff after fresh review."},{"claim_id":"AC-BAL-03","statement":"The semantic image is an internally consistent author self-report, not independent evidence of fills, PnL, alpha, win rate, or repeatability.","provenance_mode":"source_summary","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":[],"framework_claim_ids":[],"evidence_refs":[],"decision_use":"context_only","counterevidence_status":"searched_none_found","counterevidence_refs":["DOC-BALDER-IMG-08","evidence-review-sol.md:IMG-08 arithmetic review","NF02"],"falsifier":"Independent point-in-time holdings, fills, benchmark returns, and a complete denominator would be required before any performance interpretation changes."},{"claim_id":"AC-BAL-04","statement":"The stated absolute-price invalidation is non-reproducible as a falsifier for the benchmark-relative signal and may only trigger refresh or manual review.","provenance_mode":"framework_inference","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":[],"framework_claim_ids":["FC-BAL-02"],"evidence_refs":[],"decision_use":"watch_only","counterevidence_status":"searched_none_found","counterevidence_refs":["final-methodology-review:F-05","PF13"],"falsifier":"A disclosed, testable conversion from absolute price to the same benchmark-relative signal state would remove the unit-mismatch objection."}],
+  "behavior_cross_checks": [],
+  "kol_method_cards": [
+    {
+      "method_card_id": "KMC-CITRINI-20260717",
+      "author": "Citrini Research",
+      "author_handle": "@citrini",
+      "market_scope": ["US equities", "cross-asset themes"],
+      "time_horizon": ["multi-day", "swing", "thematic"],
+      "source_document_ids": ["KOL-SRC-C3", "KOL-SRC-C7", "KOL-SRC-C8", "KOL-SRC-C9"],
+      "lifecycle": {
+        "public_claim": {
+          "evidence_status": "supported",
+          "summary": "The author publicly treats a portfolio as one aggregate risk position and separates thesis, expectations, and size during drawdowns.",
+          "source_document_ids": ["KOL-SRC-C3"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": []
+        },
+        "falsifiable_thesis": {
+          "evidence_status": "supported",
+          "summary": "A directionally plausible thematic thesis is not tradeable when its timing path fails or expectations already absorb the thesis.",
+          "source_document_ids": ["KOL-SRC-C3", "KOL-SRC-C9"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": [],
+          "falsifier": "A dated, attributable source or independently observed trade record shows that timing and expectation checks were not part of the stated method."
+        },
+        "universe_selection": {
+          "evidence_status": "unknown",
+          "summary": "No complete public mechanical universe-selection rule was accepted in this retrieval.",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["Theme-basket construction details continue behind subscriber access."]
+        },
+        "entry": {
+          "evidence_status": "unknown",
+          "summary": "No complete public mechanical entry trigger was accepted in this retrieval.",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["Exact price, time, and liquidity entry gates were not found publicly."]
+        },
+        "add_reduce": {
+          "evidence_status": "supported",
+          "summary": "Do not average by cost basis; allocate the next dollar only where expected return can still be underwritten.",
+          "source_document_ids": ["KOL-SRC-C3"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": []
+        },
+        "stop_invalidation": {
+          "evidence_status": "supported",
+          "summary": "Invalidate or reduce when thesis, market expectations, sizing, or timing no longer support the position.",
+          "source_document_ids": ["KOL-SRC-C3", "KOL-SRC-C9"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No universal numeric stop was found."],
+          "falsifier": "The thesis, expectations, size, and timing all remain intact under dated primary evidence."
+        },
+        "take_profit": {
+          "evidence_status": "unknown",
+          "summary": "No complete public take-profit ladder was accepted in this retrieval.",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["Exact profit-taking thresholds were not found publicly."]
+        },
+        "exit": {
+          "evidence_status": "unknown",
+          "summary": "No complete public exit state machine was accepted in this retrieval.",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["A timing-failure admission is not a mechanical exit rule."]
+        },
+        "sizing_risk": {
+          "evidence_status": "supported",
+          "summary": "Aggregate correlated high-beta exposures as one portfolio position instead of treating every ticker as independent risk.",
+          "source_document_ids": ["KOL-SRC-C3"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No portable numeric position cap was found."]
+        },
+        "post_trade_calibration": {
+          "evidence_status": "supported",
+          "summary": "Record drawdown reactions and timing failures, then revisit strategy and sizing rather than rewriting the thesis after the fact.",
+          "source_document_ids": ["KOL-SRC-C3", "KOL-SRC-C9"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No audited calibration dataset was found."]
+        }
+      },
+      "promotion_gaps": [
+        {
+          "source_document_ids": ["KOL-SRC-C7"],
+          "reason": "The curve outcome is self-reported and has no independently audited executions; it cannot promote reliability.",
+          "inference_label": "self_reported_performance",
+          "provenance_mode": "unverified",
+          "claim_type": "opinion",
+          "can_raise_reliability": false
+        }
+      ],
+      "subscriber_gaps": [
+        {
+          "source_document_ids": ["KOL-SRC-C8"],
+          "reason": "Only the public portion was discoverable; subscriber-only portfolio construction and theme details were not inferred."
+        }
+      ],
+      "portable_parts": [
+        "Portfolio-as-position risk aggregation.",
+        "Drawdown review across thesis, expectations, size, and timing.",
+        "Next-dollar allocation instead of cost-basis averaging."
+      ],
+      "do_not_port": [
+        "Exact trades, basket weights, or hidden subscriber content.",
+        "Self-reported performance as audited edge.",
+        "Author-specific market exposure as a universal sizing rule."
+      ],
+      "unknowns": [
+        "Mechanical universe, entry, take-profit, and exit rules remain incomplete.",
+        "The sealed source ledger supplied no canonical EvidenceItem IDs; stage EID arrays remain explicit and empty until normal Evidence ingestion."
+      ],
+      "decision_boundary": {
+        "allowed_effects": ["tighten", "refresh_source", "request_manual_review"],
+        "forbidden_effects": ["raise_action_level", "raise_position_cap", "raise_reliability", "revive_l0", "order_execution"],
+        "position_multiplier": 0.0,
+        "self_reported_performance_can_raise_reliability": false,
+        "no_order_execution": true
+      }
+    },
+    {
+      "method_card_id": "KMC-BALDER-20260717",
+      "author": "Balder",
+      "author_handle": "@Balder13946731",
+      "market_scope": ["US index options", "SPX"],
+      "time_horizon": ["intraday", "daily"],
+      "source_document_ids": ["KOL-SRC-B1", "KOL-SRC-B5", "KOL-SRC-B6"],
+      "lifecycle": {
+        "public_claim": {
+          "evidence_status": "supported",
+          "summary": "The author publishes daily SPX structure using spot, gamma flip, call and put walls, VRP, and a projected range.",
+          "source_document_ids": ["KOL-SRC-B1"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": []
+        },
+        "falsifiable_thesis": {
+          "evidence_status": "supported",
+          "summary": "Positive gamma and rich VRP favor range behavior until a break through the gamma flip changes the structure.",
+          "source_document_ids": ["KOL-SRC-B1"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": [],
+          "falsifier": "SPX breaks and sustains beyond the dated gamma-flip/range structure while realized volatility contradicts the stated regime."
+        },
+        "universe_selection": {
+          "evidence_status": "unknown",
+          "summary": "No mechanical public universe-selection rule was accepted in this retrieval.",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["The public sample is SPX-centered, but no mechanical universe rule was found."]
+        },
+        "entry": {
+          "evidence_status": "partial",
+          "summary": "Use dated flip, wall, range, and expected-move levels as conditional triggers, not as standalone directional truth.",
+          "source_document_ids": ["KOL-SRC-B1", "KOL-SRC-B6"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["Exact execution and slippage gates were not captured."]
+        },
+        "add_reduce": {
+          "evidence_status": "unknown",
+          "summary": "No complete public add/reduce ladder was accepted in this retrieval.",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No dated public scaling formula was found."]
+        },
+        "stop_invalidation": {
+          "evidence_status": "unknown",
+          "summary": "No directly supported public hard-stop or invalidation rule was accepted in this retrieval.",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["A gamma-flip break was only a framework inference; no usable FrameworkClaim or universal point stop was supplied."]
+        },
+        "take_profit": {
+          "evidence_status": "unknown",
+          "summary": "No complete public take-profit rule was accepted in this retrieval.",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["Walls and favored-close levels are not automatically profit orders."]
+        },
+        "exit": {
+          "evidence_status": "unknown",
+          "summary": "No complete public exit state machine was accepted in this retrieval.",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["A range endpoint is not an observed exit instruction."]
+        },
+        "sizing_risk": {
+          "evidence_status": "unknown",
+          "summary": "No complete public position-sizing formula was accepted in this retrieval.",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["Public levels cannot be converted into contract quantity."]
+        },
+        "post_trade_calibration": {
+          "evidence_status": "partial",
+          "summary": "The author publishes a retrospective verdict, but the reported ranking and outcome remain unaudited self-report.",
+          "source_document_ids": ["KOL-SRC-B5"],
+          "framework_claim_ids": [],
+          "inference_label": "self_reported_performance",
+          "provenance_mode": "unverified",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No complete audited calibration protocol or execution ledger was found."]
+        }
+      },
+      "promotion_gaps": [
+        {
+          "source_document_ids": ["KOL-SRC-B5"],
+          "reason": "Nightly verdict and book ranking are self-reported; they cannot promote reliability without an independent outcome ledger.",
+          "inference_label": "self_reported_performance",
+          "provenance_mode": "unverified",
+          "claim_type": "opinion",
+          "can_raise_reliability": false
+        }
+      ],
+      "subscriber_gaps": [],
+      "portable_parts": [
+        "Dated SPX structure fields: spot, gamma flip, call wall, put wall, VRP, and range.",
+        "A dated gamma-flip change as a source-refresh prompt, not a hard stop.",
+        "Expected-move awareness around earnings and IV-crush risk."
+      ],
+      "do_not_port": [
+        "Self-reported hit rate or book ranking.",
+        "Public levels as a hidden position-sizing formula.",
+        "Stale gamma structure or a universal range-trading rule."
+      ],
+      "unknowns": [
+        "Add/reduce, take-profit, exit, and sizing mechanics remain incomplete.",
+        "The sealed source ledger supplied no canonical EvidenceItem IDs; stage EID arrays remain explicit and empty until normal Evidence ingestion."
+      ],
+      "decision_boundary": {
+        "allowed_effects": ["tighten", "refresh_source", "request_manual_review"],
+        "forbidden_effects": ["raise_action_level", "raise_position_cap", "raise_reliability", "revive_l0", "order_execution"],
+        "position_multiplier": 0.0,
+        "self_reported_performance_can_raise_reliability": false,
+        "no_order_execution": true
+      }
+    },
+    {
+      "method_card_id": "KMC-FRANK-20260717",
+      "author": "Frank Trading",
+      "author_handle": "@Franktradinglog",
+      "market_scope": ["US equities", "US equity options", "macro-linked themes"],
+      "time_horizon": ["intraday", "swing", "weekly review"],
+      "source_document_ids": ["KOL-SRC-F1", "KOL-SRC-F4", "KOL-SRC-F8", "KOL-SRC-F9"],
+      "lifecycle": {
+        "public_claim": {
+          "evidence_status": "supported",
+          "summary": "The author publicly links narrative monetization, sector structure, and known passive flows to tactical risk decisions.",
+          "source_document_ids": ["KOL-SRC-F8", "KOL-SRC-F9"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": []
+        },
+        "falsifiable_thesis": {
+          "evidence_status": "supported",
+          "summary": "A break of the referenced semiconductor earnings gap invalidates the long-semiconductor expression and forces a thesis refresh.",
+          "source_document_ids": ["KOL-SRC-F8"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": [],
+          "falsifier": "The referenced gap remains intact under refreshed market data, or the source attribution is shown to be incorrect."
+        },
+        "universe_selection": {
+          "evidence_status": "partial",
+          "summary": "Separate a principal theme from small exploratory positions, with sector and relative-value expressions described in the visible weekly material.",
+          "source_document_ids": ["KOL-SRC-F1"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["The full article and any complete ranking table were not public."]
+        },
+        "entry": {
+          "evidence_status": "partial",
+          "summary": "Visible examples use panic conditions, option walls, and event context as conditional entry triggers.",
+          "source_document_ids": ["KOL-SRC-F1"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No universal entry threshold or fill discipline was visible."]
+        },
+        "add_reduce": {
+          "evidence_status": "supported",
+          "summary": "During a known passive-outflow window, add gradually rather than treating the calendar effect as an immediate all-in signal.",
+          "source_document_ids": ["KOL-SRC-F9"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No numeric tranche schedule was found."]
+        },
+        "stop_invalidation": {
+          "evidence_status": "supported",
+          "summary": "Clear or reduce semiconductor longs when the referenced earnings gap breaks instead of exempting the thesis with narrative alone.",
+          "source_document_ids": ["KOL-SRC-F8"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": [],
+          "falsifier": "Refreshed market data shows the cited earnings gap did not break or was not the stated invalidation level."
+        },
+        "take_profit": {
+          "evidence_status": "partial",
+          "summary": "The public weekly contains an unaudited self-reported exploratory-position close; it does not establish a portable take-profit rule.",
+          "source_document_ids": ["KOL-SRC-F1"],
+          "framework_claim_ids": [],
+          "inference_label": "self_reported_performance",
+          "provenance_mode": "unverified",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No general take-profit schedule was visible."]
+        },
+        "exit": {
+          "evidence_status": "partial",
+          "summary": "Stop and exit a small exploratory position when its directional premise fails; do not let it inherit main-theme conviction.",
+          "source_document_ids": ["KOL-SRC-F1"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["The full exit hierarchy was not public."]
+        },
+        "sizing_risk": {
+          "evidence_status": "partial",
+          "summary": "Use small exploratory positions while the principal theme remains unclear; no fixed public portfolio cap is supplied.",
+          "source_document_ids": ["KOL-SRC-F1"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No fixed public portfolio-percentage cap was visible."]
+        },
+        "post_trade_calibration": {
+          "evidence_status": "partial",
+          "summary": "The visible weekly format separates strategy review from subsequent market analysis, but no audited calibration dataset was available.",
+          "source_document_ids": ["KOL-SRC-F1"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["Subscriber material and private community records were not inferred."]
+        }
+      },
+      "promotion_gaps": [
+        {
+          "source_document_ids": ["KOL-SRC-F1"],
+          "reason": "The reported exploratory-position gain/return and exact trade outcome are self-reported and cannot become a portable rule or promote reliability.",
+          "inference_label": "self_reported_performance",
+          "provenance_mode": "unverified",
+          "claim_type": "opinion",
+          "can_raise_reliability": false
+        },
+        {
+          "source_document_ids": ["KOL-SRC-F4"],
+          "reason": "The option result is self-reported and cannot promote reliability or become an audited performance claim.",
+          "inference_label": "self_reported_performance",
+          "provenance_mode": "unverified",
+          "claim_type": "opinion",
+          "can_raise_reliability": false
+        }
+      ],
+      "subscriber_gaps": [
+        {
+          "source_document_ids": ["KOL-SRC-F1"],
+          "reason": "Only the public portion of the weekly was treated as visible; paid outlook, sizing tables, and community material were not inferred."
+        }
+      ],
+      "portable_parts": [
+        "Principal-theme versus exploratory-position separation.",
+        "Narrative claims paired with observable gap or downstream-payment falsifiers.",
+        "Known-flow calendars as gradual execution context, not exemption from invalidation."
+      ],
+      "do_not_port": [
+        "Exact exploratory or option trades and self-reported account returns.",
+        "Hidden subscriber sizing and outlook content.",
+        "Author-specific leveraged instruments as universal implementations."
+      ],
+      "unknowns": [
+        "Complete public entry thresholds, tranche sizes, and portfolio caps remain unavailable.",
+        "The sealed source ledger supplied no canonical EvidenceItem IDs; stage EID arrays remain explicit and empty until normal Evidence ingestion."
+      ],
+      "decision_boundary": {
+        "allowed_effects": ["tighten", "refresh_source", "request_manual_review"],
+        "forbidden_effects": ["raise_action_level", "raise_position_cap", "raise_reliability", "revive_l0", "order_execution"],
+        "position_multiplier": 0.0,
+        "self_reported_performance_can_raise_reliability": false,
+        "no_order_execution": true
+      }
+    },
+    {"method_card_id":"KMC-BALDER-20260731-FINAL","author":"Balder","author_handle":"@balder714059","market_scope":["observed US-listed equity roster in this issue only; broader market scope unknown"],"time_horizon":["lookback_10_days_as_stated_unit_unknown","forward_horizon_unknown"],"source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"lifecycle":{"public_claim":{"evidence_status":"partial","summary":"The source presents a public tracking ledger driven by an undisclosed benchmark-relative signal; it does not establish real positions or trades.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":["Q-BAL-01","Q-BAL-02"],"framework_claim_ids":[],"inference_label":"direct_assertion","provenance_mode":"source_summary","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["HOLDINGS/OPEN image wording conflicts with tracking/observation prose, and no account evidence is available."]},"falsifiable_thesis":{"evidence_status":"partial","summary":"A benchmark-relative signal is said to strengthen, persist through confirmation states, or weaken; the source's absolute-price invalidation is not a same-unit falsifier.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":[],"framework_claim_ids":["FC-BAL-01","FC-BAL-02"],"inference_label":"framework_inference","provenance_mode":"framework_inference","claim_type":"assumption","supporting_eids":[],"contradicting_eids":[],"unknowns":["benchmark, formula, threshold, state count, transition window, and forward horizon are undisclosed"],"falsifier":"Fail the reconstructed method if a frozen point-in-time replay cannot reproduce the disclosed state changes; do not use the absolute-price barrier as a substitute."},"universe_selection":{"evidence_status":"partial","summary":"The article exposes one observed roster, not a reproducible universe-selection rule.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":[],"framework_claim_ids":[],"inference_label":"direct_assertion","provenance_mode":"source_summary","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["full universe, liquidity floor, market-cap floor, sector rules, scan frequency, blacklist/whitelist, and IONQ mapping are unknown"]},"entry":{"evidence_status":"partial","summary":"The source states that IONQ was newly included for cautious tracking at a disclosed reference price; this is not verified trade entry, fill, side, size, or executable origin.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":["Q-BAL-02","Q-BAL-05"],"framework_claim_ids":[],"inference_label":"direct_assertion","provenance_mode":"source_summary","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["initial threshold, first-strengthening definition, benchmark, point-in-time data cutoff, publication/delivery origin, and trade semantics"]},"add_reduce":{"evidence_status":"unknown","summary":"not_found_publicly","source_document_ids":[],"quote_anchor_ids":[],"framework_claim_ids":[],"inference_label":"not_found_publicly","provenance_mode":"unverified","claim_type":"assumption","supporting_eids":[],"contradicting_eids":[],"unknowns":["No public add/reduce, tranche, rebalance, or scale rule is disclosed in this article; absence from one article does not prove nonexistence."]},"stop_invalidation":{"evidence_status":"partial","summary":"The source says a qualifying break below 36 would move the next reference support to 31.8 and place the relative-strength signal under falsification review; it does not disclose a hard stop or order.","source_document_ids":["DOC-BALDER-2026-07-31"],"quote_anchor_ids":["Q-BAL-03"],"framework_claim_ids":[],"inference_label":"direct_assertion","provenance_mode":"source_summary","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["effective-break definition, path, timeout, level derivation, conversion to relative signal, and resulting action are unknown"],"falsifier":"Treat the stated invalidation as non-reproducible until an observable same-unit signal criterion or conversion rule is disclosed."},"take_profit":{"evidence_status":"unknown","summary":"not_found_publicly","source_document_ids":[],"quote_anchor_ids":[],"framework_claim_ids":[],"inference_label":"not_found_publicly","provenance_mode":"unverified","claim_type":"assumption","supporting_eids":[],"contradicting_eids":[],"unknowns":["No public take-profit or time-stop rule is disclosed; an open winner does not prove that no such rule exists."]},"exit":{"evidence_status":"partial","summary":"The source states that CRCL and ARM were removed from tracking after the reported excess-return signal weakened; removal is not verified execution or a reproducible general exit rule.","source_document_ids":["DOC-BALDER-2026-07-31"],"quote_anchor_ids":["Q-BAL-01","Q-BAL-07"],"framework_claim_ids":[],"inference_label":"direct_assertion","provenance_mode":"source_summary","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["weakening threshold, data cutoff, exit origin, costs, slippage, fill, and denominator are unknown"]},"sizing_risk":{"evidence_status":"unknown","summary":"not_found_publicly","source_document_ids":[],"quote_anchor_ids":[],"framework_claim_ids":[],"inference_label":"not_found_publicly","provenance_mode":"unverified","claim_type":"assumption","supporting_eids":[],"contradicting_eids":[],"unknowns":["No public position size, risk unit, leverage, concentration cap, correlation control, drawdown limit, or account context is disclosed."]},"post_trade_calibration":{"evidence_status":"partial","summary":"The source publishes an internally consistent open-name dashboard and two retrospective tracking removals, but no independently audited calibration protocol or full denominator.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":[],"framework_claim_ids":[],"inference_label":"self_reported_performance","provenance_mode":"unverified","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["fills, benchmark-relative outcomes, all historical exits, probabilities, win rate, expected value, drawdown, parameter updates, and OOS protocol are unknown"]}},"promotion_gaps":[{"reason":"The dashboard and retrospective returns are author self-report. Internal arithmetic consistency cannot raise reliability without an independent point-in-time outcome ledger and complete denominator.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"inference_label":"self_reported_performance","provenance_mode":"unverified","claim_type":"opinion","can_raise_reliability":false}],"subscriber_gaps":[{"reason":"The supplied email capture is complete for this artifact, but the canonical public page DOM and any paid method details were not verified and cannot be inferred.","source_document_ids":["DOC-BALDER-2026-07-31"]}],"portable_parts":["Describe the public method as a signal-state and tracking-state handoff, not as a verified trade system.","Keep a conservative no-change/no-upgrade default when fresh evidence is absent.","Use same-unit or explicitly converted falsifiers before calling a signal invalidated.","Retain event-level review fields only as documentation or future hypothesis design, never as proof of calibration."],"do_not_port":["The dated values 87bp, tier 0, 36, 31.8, 37.9, or 38 as reusable thresholds, stops, targets, or score inputs.","Tracking inclusion/removal or disclosed reference prices as verified entry, exit, fill, position, or account evidence.","Absolute dashboard returns as alpha, PnL, win rate, edge, or reliability promotion.","Hidden universe, sizing, add/reduce, take-profit, time-stop, scan-frequency, or subscriber rules.","Source-specific NVDA/storage/HBM/DRAM and SpaceX/TSLA taxonomy or analogy as a universe, causal, or investability rule.","A new Balder score, action level, module, KOL vote, watch-trigger action, alert, cron, email, or order path."],"unknowns":["The Substack @balder714059 identity was not re-linked to the existing X @Balder13946731 card; the two cards must remain distinct.","The canonical public article DOM, benchmark, formula, thresholds, full universe, time horizon, scan cadence, publication origin, execution semantics, and independent outcomes remain unknown.","MRVL and NFLX are NEW in the semantic image but continued/no-change in prose; their state remains mixed and must not be used as an oracle.","The source contains no canonical EvidenceItem IDs; all stage EID arrays remain explicitly empty and no Memory write is authorized."],"decision_boundary":{"allowed_effects":["tighten","refresh_source","request_manual_review"],"forbidden_effects":["raise_action_level","raise_position_cap","raise_reliability","revive_l0","order_execution"],"position_multiplier":0,"self_reported_performance_can_raise_reliability":false,"no_order_execution":true}}
+  ],
+  "no_order_execution": true
+}

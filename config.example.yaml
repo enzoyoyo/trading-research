@@ -1,0 +1,34 @@
+# Copy to ~/.config/trading-research/config.yaml or set TRADING_RESEARCH_CONFIG.
+# This file must not contain secrets; put credentials in environment / chmod 600 env files.
+
+skill: trading-research
+mode: research_only
+
+safety:
+  allow_live_trading: false
+  allow_order_submission: false
+  default_okx_mode: public
+  require_paper_gate_for_broker_actions: true
+
+paths:
+  state_dir: ${HOME}/.cache/trading-research/state
+  sec_cache_dir: ${HOME}/.cache/trading-research/sec-edgar
+  search_env: ${HOME}/.config/trading-research/search.env
+
+data_sources:
+  longbridge:
+    enabled: false
+    bin_env: LONGBRIDGE_BIN
+  akshare:
+    enabled: true
+    python_env: AKSHARE_PYTHON
+  okx:
+    enabled: true
+    mode: public
+  multi_source_search:
+    enabled: true
+    keyed_engines_require_env: true
+
+logging:
+  scrub_secrets: true
+  never_print_env_values: true
