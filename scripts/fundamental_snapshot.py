@@ -6,22 +6,39 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-AKSHARE_PYTHON = os.environ.get("AKSHARE_PYTHON") or "/opt/homebrew/bin/python3"
+AKSHARE_PYTHON = os.environ.get("AKSHARE_PYTHON") or sys.executable
 SCRIPTS = Path(__file__).resolve().parent
+LONG_BRIDGE_BIN = os.environ.get("LONGBRIDGE_BIN") or shutil.which("longbridge")
+DEFAULT_CONSENSUS_ROOT = (
+    Path.home() / ".cache" / "hermes" / "trading-research"
+    / "earnings-radar" / "consensus"
+)
 sys.path.insert(0, str(SCRIPTS))
 
 try:
     from us_company_evidence import collect_company_evidence
 except ImportError:
     collect_company_evidence = None  # type: ignore[assignment]
+
+
+def require_longbridge_bin(*, runner: Callable[..., Any] = subprocess.run) -> str:
+    if LONG_BRIDGE_BIN:
+        return LONG_BRIDGE_BIN
+    if runner is not subprocess.run:
+        return "longbridge"
+    raise RuntimeError("LongBridge CLI not found; install `longbridge`, add it to PATH, or set LONGBRIDGE_BIN")
 
 
 def _no_proxy_env() -> dict[str, str]:
@@ -34,6 +51,240 @@ def _no_proxy_env() -> dict[str, str]:
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def consensus_cache_root() -> Path:
+    return Path(os.environ.get("EARNINGS_RADAR_CONSENSUS_DIR", str(DEFAULT_CONSENSUS_ROOT))).expanduser()
+
+
+def _finite(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _aware_dt(value: Any) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return parsed.astimezone(timezone.utc) if parsed.tzinfo is not None else None
+
+
+def _candidate_dicts(payload: Any, *, depth: int = 0) -> list[dict[str, Any]]:
+    if depth > 3:
+        return []
+    if isinstance(payload, list):
+        return [row for item in payload for row in _candidate_dicts(item, depth=depth + 1)]
+    if not isinstance(payload, dict):
+        return []
+    rows = [payload]
+    for value in payload.values():
+        if isinstance(value, (dict, list)):
+            rows.extend(_candidate_dicts(value, depth=depth + 1))
+    return rows
+
+
+def normalize_consensus_payload(payload: Any) -> list[dict[str, Any]]:
+    consensus_keys = ("eps_consensus", "consensus_eps", "forecast_eps", "mean_eps", "avg_eps")
+    actual_keys = ("reported_eps", "actual_eps", "eps_actual")
+    period_keys = ("fiscal_period", "report_period", "period", "quarter", "year")
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, float, float | None, str | None]] = set()
+    for raw in _candidate_dicts(payload):
+        consensus = next((_finite(raw.get(key)) for key in consensus_keys if _finite(raw.get(key)) is not None), None)
+        if consensus is None:
+            continue
+        period = next((str(raw.get(key)).strip() for key in period_keys if str(raw.get(key) or "").strip()), "unknown")
+        actual = next((_finite(raw.get(key)) for key in actual_keys if _finite(raw.get(key)) is not None), None)
+        reported_at = next((
+            str(raw.get(key)).strip() for key in ("reported_at", "earnings_release_ts", "published_at")
+            if str(raw.get(key) or "").strip()
+        ), None)
+        identity = (period, consensus, actual, reported_at)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        rows.append({
+            "fiscal_period": period,
+            "eps_consensus": consensus,
+            "reported_eps": actual,
+            "reported_at": reported_at,
+        })
+    return rows
+
+
+def fetch_eps_consensus(
+    symbol: str,
+    *,
+    runner: Callable[..., Any] = subprocess.run,
+) -> tuple[list[dict[str, Any]], str | None, list[dict[str, Any]]]:
+    clean = str(symbol).strip().upper().replace(".US", "")
+    failures: list[str] = []
+    for endpoint in ("consensus", "forecast-eps"):
+        command = [require_longbridge_bin(runner=runner), endpoint, f"{clean}.US", "--format", "json"]
+        try:
+            proc = runner(command, capture_output=True, text=True, timeout=45)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            failures.append(f"{endpoint}:{type(exc).__name__}")
+            continue
+        if int(proc.returncode) != 0:
+            failures.append(f"{endpoint}:nonzero")
+            continue
+        try:
+            payload = json.loads(proc.stdout or "null")
+        except json.JSONDecodeError:
+            failures.append(f"{endpoint}:invalid_json")
+            continue
+        rows = normalize_consensus_payload(payload)
+        if rows:
+            return rows, f"longbridge_{endpoint.replace('-', '_')}", []
+        failures.append(f"{endpoint}:eps_consensus_missing")
+    return [], None, [{
+        "gap": "EPS consensus unavailable",
+        "impact": "consensus part omitted; beat rate remains unavailable",
+        "severity": "medium",
+        "error_class": "source_unavailable",
+        "attempts": failures,
+    }]
+
+
+def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2, allow_nan=False)
+            handle.write("\n")
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+def freeze_consensus_snapshot(
+    symbol: str,
+    rows: list[dict[str, Any]],
+    *,
+    source: str,
+    observed_at: str,
+    root: Path,
+) -> Path:
+    observed = _aware_dt(observed_at)
+    if observed is None:
+        raise ValueError("consensus observed_at must be timezone-aware")
+    clean = str(symbol).strip().upper().replace(".US", "")
+    payload = {
+        "schema_version": "eps_consensus_snapshot.v1",
+        "symbol": clean,
+        "observed_at": observed.isoformat(),
+        "source": source,
+        "rows": rows,
+        "immutable_point_in_time": True,
+        "no_order_execution": True,
+    }
+    digest = hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:8]
+    stamp = observed.strftime("%Y%m%dT%H%M%SZ")
+    path = root / clean / f"{stamp}_{digest}.json"
+    if not path.exists():
+        _atomic_json(path, payload)
+    return path
+
+
+def load_consensus_snapshots(symbol: str, *, root: Path) -> list[dict[str, Any]]:
+    clean = str(symbol).strip().upper().replace(".US", "")
+    snapshots: list[dict[str, Any]] = []
+    for path in sorted((root / clean).glob("*.json")) if (root / clean).exists() else []:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict) and _aware_dt(payload.get("observed_at")) is not None:
+            snapshots.append(payload)
+    return snapshots
+
+
+def compute_beat_rate_last_8(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
+    ordered = sorted(
+        (row for row in snapshots if _aware_dt(row.get("observed_at")) is not None),
+        key=lambda row: _aware_dt(row.get("observed_at")) or datetime.max.replace(tzinfo=timezone.utc),
+    )
+    frozen_before_result: dict[str, tuple[datetime, float]] = {}
+    outcomes: dict[str, tuple[datetime, bool]] = {}
+    for snapshot in ordered:
+        observed = _aware_dt(snapshot.get("observed_at"))
+        rows = snapshot.get("rows") if isinstance(snapshot.get("rows"), list) else []
+        if observed is None:
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            period = str(row.get("fiscal_period") or "").strip()
+            consensus = _finite(row.get("eps_consensus"))
+            actual = _finite(row.get("reported_eps"))
+            reported_at = _aware_dt(row.get("reported_at"))
+            if not period or consensus is None:
+                continue
+            if actual is None:
+                frozen_before_result.setdefault(period, (observed, consensus))
+                continue
+            prior = frozen_before_result.get(period)
+            if prior is None or reported_at is None:
+                continue
+            if prior[0] < reported_at <= observed and period not in outcomes:
+                outcomes[period] = (reported_at, actual > prior[1])
+    paired = sorted(outcomes.values(), key=lambda item: item[0])[-8:]
+    if len(paired) < 8:
+        return {
+            "consensus_history": "unavailable" if not paired else "insufficient",
+            "beat_rate_last_8": None,
+            "beat_rate_sample_count": len(paired),
+        }
+    return {
+        "consensus_history": "available",
+        "beat_rate_last_8": sum(1 for _, beat in paired if beat) / 8.0,
+        "beat_rate_sample_count": 8,
+    }
+
+
+def collect_consensus_part(
+    symbol: str,
+    *,
+    runner: Callable[..., Any],
+    root: Path,
+    observed_at: str,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    rows, source, gaps = fetch_eps_consensus(symbol, runner=runner)
+    if not rows or source is None:
+        return None, gaps
+    path = freeze_consensus_snapshot(
+        symbol, rows, source=source, observed_at=observed_at, root=root,
+    )
+    history = compute_beat_rate_last_8(load_consensus_snapshots(symbol, root=root))
+    part = {
+        "source": source,
+        "observed_at": _aware_dt(observed_at).isoformat(),
+        "fiscal_period": rows[0]["fiscal_period"],
+        "eps_consensus": rows[0]["eps_consensus"],
+        "rows": rows,
+        "frozen_snapshot_path": str(path),
+        **history,
+        "no_retroactive_backfill": True,
+    }
+    if history["beat_rate_last_8"] is None:
+        gaps.append({
+            "gap": "consensus history unavailable",
+            "impact": "beat_rate_last_8 is null until eight point-in-time pairs accumulate",
+            "severity": "medium",
+            "error_class": history["consensus_history"],
+        })
+    return part, gaps
 
 
 def run_py(code: str, timeout: int = 45) -> dict[str, Any]:
@@ -172,7 +423,13 @@ except Exception as e:
     return finalize(result)
 
 
-def us_share_fundamentals(code: str) -> dict[str, Any]:
+def us_share_fundamentals(
+    code: str,
+    *,
+    consensus_runner: Callable[..., Any] = subprocess.run,
+    consensus_root: Path | None = None,
+    observed_at: str | None = None,
+) -> dict[str, Any]:
     sym = code.upper().replace(".US", "")
     result = {
         "market": "US",
@@ -185,6 +442,7 @@ def us_share_fundamentals(code: str) -> dict[str, Any]:
         "gaps": [],
         "no_order_execution": True,
     }
+    consensus_observed_at = observed_at or result["fetched_at"]
 
     if collect_company_evidence is not None:
         collected = collect_company_evidence(f"{sym}.US")
@@ -217,6 +475,16 @@ def us_share_fundamentals(code: str) -> dict[str, Any]:
             "severity": "high",
             "error_class": "adapter_unavailable",
         })
+
+    consensus_part, consensus_gaps = collect_consensus_part(
+        sym,
+        runner=consensus_runner,
+        root=consensus_root or consensus_cache_root(),
+        observed_at=consensus_observed_at,
+    )
+    if consensus_part is not None:
+        result["parts"]["consensus"] = consensus_part
+    result["gaps"].extend(consensus_gaps)
 
     # AkShare remains a per-dimension fallback. Do not call it when LongBridge
     # or SEC already supplied the corresponding core dimension.

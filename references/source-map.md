@@ -78,6 +78,13 @@
 - `KOL-SRC-B6`（2026-07-16）：https://x.com/Balder13946731/status/2077815613112897882 — 财报 expected move 与 IV-crush/side-trade 风险元数据。
 - `KOL-SRC-B5`（2026-07-13）：https://x.com/Balder13946731/status/2076675543593087321 — nightly verdict/book grade 为自报绩效，只登记 promotion gap；公开仓位公式、完整 09:40 实施链仍 unknown。
 
+### Balder Earnings Radar 公开方法论
+
+- **来源**：https://balder-ai.com/ ，访问日期 2026-08-21；`methodology_only`。页面公开的可复现部分限于 ATM straddle implied move、同标的历史 typical move、BMO/AMC session alignment、RICH≥1.25×、CHEAP≤0.95× 与 badge 展示结构。
+- **可信度边界**：页面自报 71%（n=24）只登记为 `opinion + unverified`，没有独立 outcome ledger、完整 denominator、成本或 point-in-time 冻结证据，不得提高 reliability、动作等级或 position cap。
+- **吸收**：固定公式、session 对齐、相对标签和可复现快照纪律，落到 `earnings-event-options-prediction-gate.md`、`scripts/options_positioning_snapshot.py`、`scripts/earnings_move_history.py`、`scripts/earnings_implied_distribution.py` 与 `KMC-BALDER-EARNINGS-RADAR-20260821`。
+- **拒绝迁移**：黑箱 τ-adjusted core / system lean / flow z / rs_phase；raw P/C、ΔOI、beat streak 或 badge 不作方向证据；不新增 Compiler module、动作等级、自动 prediction、仓位公式或订单路径。
+
 ### @Franktradinglog / Frank Trading
 
 - `KOL-SRC-F8`（2026-07-01）：https://x.com/Franktradinglog/status/2072428625685786711 — compute monetization 叙事与半导体 earnings-gap invalidation 元数据。
@@ -192,7 +199,7 @@
 ## v2.30 新增来源
 
 ### Balder（@Balder13946731）Substack + X 近三日长帖
-- **来源**：Substack《The Memory Trade on Nvidia Time》（2026-07-02，公开全文，已 WebFetch 原文）+ X 2026-07-02 SPX read / 2026-07-01 云分化 / 2026-06-29 M7 相对 IV 帖（贡献者提供的 `x_articles_last_20_days_20260702.md` 汇总）
+- **来源**：Substack《The Memory Trade on Nvidia Time》（2026-07-02，公开全文，已 WebFetch 原文）+ X 2026-07-02 SPX read / 2026-07-01 云分化 / 2026-06-29 M7 相对 IV 帖（用户 提供的 `x_articles_last_20_days_20260702.md` 汇总）
 - **蒸馏内容**：三时钟/三峰分离/二阶导数/七路标 checklist、类比先验双向断裂清单；VRP 门（implied vs realized c2c + Garman-Klass、四象限）、财报季相对 IV 横截面 positioning clue；locked_buyer 云厂 vs 现货算力商分化
 - **映射文件**：`cycle-position-three-clocks.md`、`options-gamma-structure.md`（VRP 节）、`second-order-supply-shock-mapping.md`（暴露分层交叉）、`x-frontline-intelligence.md`（kol_model_signal）
 - **拒绝迁移**：MU/NVDA 2026-07 数值与 analog 减点区间（只作带日期实例，禁止照抄）；Balder Fable 系统自报点位命中（记 `kol_model_signal`，幸存者偏差不可排除）；6/30 第一性原理帖（已被 v2.29 Participant Flow 覆盖，不重复）
@@ -212,16 +219,16 @@
 ## v2.29 新增来源
 
 ### Participant Flow & Motivation Mapping（第一性原理层）
-- **来源**：个人交易哲学（可替换为自有方法论） + 市场微观结构理论（Kyle 1985、Hasbrouck 1991、Avellaneda-Stoikov 2008）+ Auction Market Theory（Steidlmayer 1985）+ 全网订单流与参与者流实践
+- **来源**：用户 个人交易哲学 + 市场微观结构理论（Kyle 1985、Hasbrouck 1991、Avellaneda-Stoikov 2008）+ Auction Market Theory（Steidlmayer 1985）+ 全网订单流与参与者流实践
 - **核心洞见**：价格没有公式，只有买卖双方的成交。每只股票由一群结构相对固定的参与者构成；他们的动机随信息输入此消彼长。先画参与者图谱再走任何方法论。
 - **映射文件**：`participant-flow-motivation.md`
 - **约束**：参与者图谱只能基于可验证数据（13F/CCASS/short interest/cap flow），不可虚构。参与者流是第一性原理层（Step 0），不单独决定动作等级。
 
 ## IMA 个人知识库 「个人交易法」
 
-创建者 Maintainer，75 条内容。
-**本地原文路径：`${HOME}/Documents/trading-research-notes/source-archive`**（53 个文件，含全部 Agent 提示词 md + txt 正文；2026-06-05 从已删除的 `Downloads/trading` 归档至此）。
-> 注：IMA OpenAPI 只能枚举结构，**无法读取正文**。所以正文研究只能走本地 `收集/` 目录。
+创建者 🐠用户，75 条内容。
+**原文保存于本地私有档案（未公开路径）。**
+> 注：IMA OpenAPI 只能枚举结构，**无法读取正文**；公开版本不包含私有原文档案。
 
 | 资料类别 | 映射模块 |
 |---|---|
@@ -341,13 +348,13 @@
 ## v2.25 新增来源
 
 ### 景气度投资分析框架提示词 v1.0 · 中观景气度投资研究员方法论
-- **来源**：贡献者提供的《景气度投资分析框架提示词 v1.0》文档（2026-06-25 会话摄入）；案例跨市场（纳指 1999、立讯 2018-2019、光模块 2023-2025、美伊冲突 2026）。
+- **来源**：用户 提供的《景气度投资分析框架提示词 v1.0》文档（2026-06-25 会话摄入）；案例跨市场（纳指 1999、立讯 2018-2019、光模块 2023-2025、美伊冲突 2026）。
 - **蒸馏内容**：信息有效性过滤器（只看影响未来两年盈利预测的信息）、周期长度判断=胜负手（≥2 年才重仓，判不出长度→全篇降级）、戴维斯双击双段收益（只有板块性 beat 触发估值第二段）、成长/消费/周期（纯周期 vs 周期成长接力结构）型归类、空间→壁垒→确定性→估值四维度双门槛、业绩超预期路径推演、左右侧买点（行情级别>左右侧）、卖出风控三件套、回撤归因三分法、方法适用性自检。
 - **映射文件**：`prosperity-davis-double-framework.md`、`decision-compiler.md`、`method-rotation-matrix.md`、`serenity-method.md`、`expected-returns-framework.md`。
 - **拒绝迁移**：A 股数值锚（科技 10-40 倍/白酒批价/制造业 40 倍卖出纪律）禁止直接套用港股美股；「不做 DCF/宏观降权」只在本方法内部生效，不否定 `liquidity-valuation-duality`、不覆盖 `risk_regime`；不新增动作等级；不给具体仓位比例；不真实下单。
 
 ### 最强公募选股 skill（fund-stock-scanner 五层框架）
-- **来源**：贡献者提供的《最强公募选股skill.md》文档（2026-06-25 会话摄入），产业中观→产业链纵深→供需瓶颈→量价齐升→远期价值定价五层 + 极致集中。
+- **来源**：用户 提供的《最强公募选股skill.md》文档（2026-06-25 会话摄入），产业中观→产业链纵深→供需瓶颈→量价齐升→远期价值定价五层 + 极致集中。
 - **蒸馏内容**：只取两点真增量——「远期价值定价透支判断」（当前 PE 对应未来 1-2 年业绩是否透支）与「公募极致集中输出审美」（核心 2-4 + 观察 2-4、≤8 只、敢于排序、新题材优先、纠错信号必备）。
 - **映射文件**：`prosperity-davis-double-framework.md`（输出纪律段）。
 - **拒绝迁移**：五层框架的产业链/瓶颈四层已被 `serenity-method.md` 完整覆盖，不重复；公募执行机制（`search_finance_reports`/`query_finance_data`/gather-make-report 并行/`.alphaclaw` 路径）属另一套系统，**不迁移**——本 skill 取数仍走 LongBridge/Grok/Decision Compiler 主链。
@@ -370,7 +377,7 @@
 ## v2.45 新增来源
 
 ### 面基播客 E159 · 恽雷@南方基金《港股的特殊之处与生存之道》
-- **来源**：面基播客 E159（嘉宾恽雷@南方基金，2026-05-25）。证据材料四项：本地文字稿（原路径 `${HOME}/Documents/trading-research-notes/examples/hk-offshore-notes.md` 已于 2026-07-21 失效——文件被移入废纸篓，同日抢救归档至 `${HOME}/Documents/trading-research-notes/source-archive`；SHA-256 `331dd05384e60d2800eb184e8198d3052972ce8e7e8b05b5fa0c1cac6567ef9b`，32136 字节；`partial`，仅前~30分钟）、贡献者提供的全集精简摘要（2026-07-20 会话摄入）、小宇宙 https://www.xiaoyuzhoufm.com/episode/6a13b560e59ebca9363afd1d 、老钱日日谈公众号转载的恽雷一季度基金报告节选《港股市场的特殊之处和生存之道》 https://mp.weixin.qq.com/s/QgKtQdHvkM5ZpJYGg3mLjQ 。级别 `framework_inference`（非逐字引文）。
+- **来源**：面基播客 E159（嘉宾恽雷@南方基金，2026-05-25）。证据材料四项：本地文字稿（本地私有档案，路径未公开；`partial`，仅前约 30 分钟）、用户 提供的全集精简摘要（2026-07-20 会话摄入）、小宇宙 https://www.xiaoyuzhoufm.com/episode/6a13b560e59ebca9363afd1d 、老钱日日谈公众号转载的恽雷一季度基金报告节选《港股市场的特殊之处和生存之道》 https://mp.weixin.qq.com/s/QgKtQdHvkM5ZpJYGg3mLjQ 。级别 `framework_inference`（非逐字引文）。
 - **蒸馏内容**：港股离岸身份第一性检查（可选性/增强互补性/平准力量缺失→低估值不构成买入理由，必须有收敛契机）、资金阵营三分（外资长线/保险南下/对冲基金）、流动性横截面分层（高股息端/高景气端/中间地带）、收益资产 vs 波动率资产分类（恒科 ETF 行为学）、因子排序与动量崩溃纪律（动量>价值>股息率>低波动，回撤 10-20% 强制复核）、生存三件套建仓顺序（打底→入池→右侧进→再平衡）、388.HK 择时锚+海外流动性二次验证、IPO 抽水与次新蜜月期供给检查、贝塔各向同性/异性 ETF-主动路由、充分定价识别与幸存者偏差提醒。
 - **映射文件**：`hk-offshore-market-playbook.md`（唯一新文件，tighten-only overlay）；交叉引用（不改写）`participant-flow-motivation.md`、`liquidity-valuation-duality.md`、`etf-selection-rotation.md`、`endogenous-market-structure-playbook.md`、`dividend-quality-framework.md`、`trading-laws.md`、`method-rotation-matrix.md`、`decision-compiler.md`。
 - **拒绝迁移**：控回撤三件套不进 `trading-laws.md`（避免与既有单笔止损/破 5 日线/Frank 回撤自检重复）；不改 `liquidity-valuation-duality.md`（不同作者的蒸馏文件不混写，只交叉链接）；不新增数据脚本（388.HK 择时锚复用现有 `scripts/longbridge_query.py` 手动取数，YAGNI，可选 Phase 2 默认不做）；幸存者偏差/回测后视镜论述只并入 playbook 一句方法论提醒，不建独立框架。数值锚（成交额 1/10、股息率 11-12%、恒科 ±40-50%、2021 分水岭）按 v2.30 先例标注：机制可迁移，实例数值以 2026-05 播客陈述为准，使用时须按当期事实重填。
@@ -392,3 +399,13 @@
 - 景气度·戴维斯双击的方法论（周期长度判断、双段收益、双门槛、回撤归因）跨 A/H/US 通用，但 A 股数值锚（10-40 倍/批价/40 倍/公募集中审美）属制度细节，禁止套用港股美股；景气诊断复用 Serenity，不另起炉灶；结论编译进 fundamentals，不新增动作等级、不单独提高仓位。
 - 美股期权 Gamma 框架（逐档 dealer 敞口重建）不得套到 A 股期权——A 股只能算方向性情绪信号（P/C 比、总 OI），禁止声称 Gamma Flip/Put Wall/Call Wall 价位。
 - 利率/FX 读数（收益率曲线、利差、DXY）只作宏观 overlay 输入 `risk_regime`/`macro`，不对国债/汇率本身做独立标的买卖建议；加密杠杆清算复用既有 `forced_liquidation`/`liquidity_squeeze`，不新建加密专属清算等级。
+
+## AlphaPurify 因子研究方法来源
+
+- **仓库**：https://github.com/eliasswu/AlphaPurify
+- **固定版本**：commit `e1f8f34d`；2026-07-12 只读审计。
+- **许可证**：MIT；`methodology_only_no_code_copied=true`。本 Skill 未复制上游 Python/Polars 代码、配置、测试、图表或运行时依赖。
+- **吸收边界**：仅按公开量化方法 clean-room 重写 Spearman IC/ICIR 与同宇宙随机对照、分位分组回测中的权重漂移/换手/双向费税机制，以及 `get_methods` 自描述注册表设计模式；实现必须服从本 Skill 的逐截面、no-lookahead、fail-closed、OOS 与 `no_order_execution` 契约。
+- **拒绝清单**：拒绝上游七类已证实坏模式——`Exposures` 以 shift(+) 冒充前向收益、EWMA 前视与错误公式、`scale_X` 全样本标准化、boxcox 全样本 min 平移、全表日期位移混串 symbol、停牌/退市收益填 0、null 参与分箱计数；同时拒绝 EWMA、boxcox、静默失效的 ransac、RF/GBDT/KRR 等 ML 中性化、上游 `Exposures` 归因实现、复制粘贴式 `trace()`、Arrow mmap、多进程与 Plotly 报表。
+- **特别甄别**：不引用“4M 行 25 秒”“1:1 实盘级回测”“Rust 向量化”、README 对竞品的优劣判断、展示图或 `factor = 未来收益 + 噪声` 演示作为可信度/性能证据。
+- **映射**：`factor-validation-strict-gate.md`；后续因子面板、引擎和回测脚本只迁移上述方法边界，不迁移产品声称或坏实现。

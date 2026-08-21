@@ -71,6 +71,7 @@ overnight_ensemble_ranker:
     close_auction_flow: <MOC/LOC imbalance|null>    # 收盘竞价单流，15:50/15:55 ET 后可得；缺失记 null
     event_proximity: <from event_reaction_journal>  # 事件邻近度；binary event 未拆情景 → 该票降权
     momentum_rs: <trend/相对强度 from kline>         # 动量 + 相对大盘强度
+    factor_cross_section_vote: <from premarket_screen.py; confirmed_alive-only>  # 因子横截面 vote；纪律同 momentum_rs；权重进入 calibration 分桶自调
     breadth_regime: <from dispersion_crowding.py>    # 板块广度/相关性；correlation 回归 1 → 全局降权
     capex_duration: <from capex rotation overlay>    # 利率/折现率下谁被贴现
     kol_clue: <from x_frontline; capped |w|<=0.15>   # 仅线索，权重封顶，须身份+交叉+时间验证

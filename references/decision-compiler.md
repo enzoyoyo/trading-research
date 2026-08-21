@@ -33,7 +33,7 @@ module_signal:
 ## 合成规则
 
 1. **动作分轴**：`entry_permission` 只裁决新开/加仓；`holding_directive` 只裁决已有持仓，优先级 `EXIT > REDUCE > HOLD`。L4/L5 不再参与 L0-L3 数值排序。strict v2 只有 `intent=open` 能形成 entry authority；`research/hold/reduce/exit` 即使 baseline 豁免且收到正向 L1-L3 signal，也强制 `entry_permission=BLOCK`、`final_position_multiplier=0.0`，但仍可按 holding signal 输出 REDUCE/EXIT。
-2. **Hard veto 优先并分类型**（v2.36，2026-07-10 拍板）：任一模块 `hard_veto=true` 都令新仓 `BLOCK`、`final_position_multiplier=0.0`。有持仓时按下表裁决；两类同时出现时市场风险型优先。
+2. **Hard veto 优先并分类型**（v2.36，用户 2026-07-10 拍板）：任一模块 `hard_veto=true` 都令新仓 `BLOCK`、`final_position_multiplier=0.0`。有持仓时按下表裁决；两类同时出现时市场风险型优先。
 
    | veto 类型 | module 集合 | `has_position=true` 后果 |
    |---|---|---|

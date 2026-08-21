@@ -247,14 +247,14 @@ class SecAdapterTests(unittest.TestCase):
 
         cache: dict = {}
         url = "https://data.sec.gov/submissions/CIK0000320193.json"
-        first = subject.fetch_sec_json(url, identity="Trading Research Bot research-bot@example.com", transport=fake_transport, cache=cache)
-        second = subject.fetch_sec_json(url, identity="Trading Research Bot research-bot@example.com", transport=fake_transport, cache=cache)
+        first = subject.fetch_sec_json(url, identity="the user Research the user@example.com", transport=fake_transport, cache=cache)
+        second = subject.fetch_sec_json(url, identity="the user Research the user@example.com", transport=fake_transport, cache=cache)
         self.assertEqual(first["status"], "ok")
         self.assertEqual(second["status"], "ok")
         self.assertFalse(first["from_cache"])
         self.assertTrue(second["from_cache"])
         self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0]["headers"]["User-Agent"], "Trading Research Bot research-bot@example.com")
+        self.assertEqual(calls[0]["headers"]["User-Agent"], "the user Research the user@example.com")
         self.assertEqual(calls[0]["headers"]["Accept-Encoding"], "gzip, deflate")
 
     def test_http_failures_are_not_rewritten_as_no_filings(self) -> None:
@@ -263,7 +263,7 @@ class SecAdapterTests(unittest.TestCase):
                 return {"status": status, "body": b"", "headers": {}}
             result = subject.fetch_sec_json(
                 "https://data.sec.gov/submissions/CIK0000320193.json",
-                identity="Trading Research Bot research-bot@example.com",
+                identity="the user Research the user@example.com",
                 transport=fake_transport,
                 cache={},
             )
@@ -283,7 +283,7 @@ class SecAdapterTests(unittest.TestCase):
 
         result = subject.fetch_sec_json(
             "https://data.sec.gov/submissions/CIK0000320193.json",
-            identity="Trading Research Bot research-bot@example.com",
+            identity="the user Research the user@example.com",
             transport=fake_transport,
             cache={},
         )
@@ -304,14 +304,14 @@ class SecAdapterTests(unittest.TestCase):
             cache_dir = Path(temp_dir) / "sec-cache"
             first = subject.fetch_sec_json_cached(
                 url,
-                identity="Trading Research Bot research-bot@example.com",
+                identity="the user Research the user@example.com",
                 transport=fake_transport,
                 cache_dir=cache_dir,
                 ttl_seconds=60,
             )
             cached = subject.fetch_sec_json_cached(
                 url,
-                identity="Trading Research Bot research-bot@example.com",
+                identity="the user Research the user@example.com",
                 transport=fake_transport,
                 cache_dir=cache_dir,
                 ttl_seconds=60,
@@ -323,7 +323,7 @@ class SecAdapterTests(unittest.TestCase):
             os.utime(files[0], (1, 1))
             refreshed = subject.fetch_sec_json_cached(
                 url,
-                identity="Trading Research Bot research-bot@example.com",
+                identity="the user Research the user@example.com",
                 transport=fake_transport,
                 cache_dir=cache_dir,
                 ttl_seconds=1,
@@ -406,7 +406,7 @@ class PipelineIntegrationTests(unittest.TestCase):
             result = subject.collect_company_evidence(
                 "AAPL.US",
                 runner=fake_runner,
-                sec_identity="Trading Research Bot research-bot@example.com",
+                sec_identity="the user Research the user@example.com",
                 sec_transport=fake_transport,
                 sec_cache_dir=Path(temp_dir) / "sec-cache",
             )

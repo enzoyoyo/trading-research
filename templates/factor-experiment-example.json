@@ -1,0 +1,133 @@
+{
+  "schema_version": "factor_experiment_fixture.v1",
+  "description": "Contract fixtures for strict factor verdicts; no performance claim.",
+  "cases": [
+    {
+      "name": "confirmed_alive_with_costed_time_split",
+      "factor": "mom_20_1",
+      "horizon": 5,
+      "engine_run": {
+        "schema_version": "factor_engine_run.v1",
+        "run_id": "fr_fixture_alive",
+        "status": "ok",
+        "market": "A",
+        "universe": {"symbols": 40, "basis": "user_watchlist_survivorship_biased"},
+        "n_factors_scanned": 1,
+        "factors": {
+          "mom_20_1": {
+            "direction_hypothesis": "+",
+            "calculation_ref": "close[t-1]/close[t-21] - 1",
+            "horizons": {
+              "5": {
+                "status": "ok",
+                "mean_ic": 0.04,
+                "random_ic_mean": 0.001,
+                "alpha_t": 5.1,
+                "train": {"mean_ic": 0.045, "alpha_t": 4.2},
+                "test": {"mean_ic": 0.031, "alpha_t": 3.5}
+              }
+            }
+          }
+        },
+        "no_order_execution": true
+      },
+      "backtest_run": {
+        "schema_version": "factor_backtest_run.v1",
+        "status": "ok",
+        "factor": "mom_20_1",
+        "costs_included": "yes",
+        "train": {"periods": 8},
+        "test": {"periods": 4},
+        "robustness_checks": ["no_lookahead_fac_shift>=1", "survivorship_current_constituents"],
+        "failure_modes": [],
+        "no_order_execution": true
+      },
+      "expected_contract": {
+        "research_experiment": {
+          "hypothesis": "mom_20_1 retains cross-sectional alpha in A market at horizon 5",
+          "data_scope": "market=A;universe=user_watchlist_survivorship_biased;run_id=fr_fixture_alive;horizon=5",
+          "feature_set": ["mom_20_1"],
+          "train_validation_test": "time_split",
+          "costs_included": "yes",
+          "robustness_checks": ["no_lookahead_fac_shift>=1", "survivorship_current_constituents"],
+          "failure_modes": [],
+          "decision_use": "ranking_support",
+          "module_signal": {"module": "quant_robustness", "max_action_level": "L0", "position_multiplier": 0.0, "hard_veto": false, "reason": "robustness_passed"}
+        },
+        "factor_validation": {
+          "random_ic_mean": 0.001,
+          "alpha_t": 5.1,
+          "n_factors_scanned": 1,
+          "state": "confirmed_alive",
+          "threshold": 3.5,
+          "train": {"mean_ic": 0.045, "alpha_t": 4.2},
+          "test": {"mean_ic": 0.031, "alpha_t": 3.5}
+        }
+      }
+    },
+    {
+      "name": "train_only_is_hypothesis_only",
+      "factor": "mom_20_1",
+      "horizon": 5,
+      "engine_run": {
+        "schema_version": "factor_engine_run.v1",
+        "run_id": "fr_fixture_train_only",
+        "status": "ok",
+        "market": "A",
+        "universe": {"symbols": 40, "basis": "user_watchlist_survivorship_biased"},
+        "n_factors_scanned": 1,
+        "factors": {
+          "mom_20_1": {
+            "direction_hypothesis": "+",
+            "calculation_ref": "close[t-1]/close[t-21] - 1",
+            "horizons": {
+              "5": {
+                "status": "ok",
+                "mean_ic": 0.03,
+                "random_ic_mean": 0.001,
+                "alpha_t": 4.0,
+                "train": {"mean_ic": 0.04, "alpha_t": 3.5},
+                "test": {"mean_ic": 0.004, "alpha_t": 3.499}
+              }
+            }
+          }
+        },
+        "no_order_execution": true
+      },
+      "backtest_run": {
+        "schema_version": "factor_backtest_run.v1",
+        "status": "ok",
+        "factor": "mom_20_1",
+        "costs_included": "yes",
+        "train": {"periods": 8},
+        "test": {"periods": 4},
+        "robustness_checks": ["no_lookahead_fac_shift>=1", "survivorship_current_constituents"],
+        "failure_modes": [],
+        "no_order_execution": true
+      },
+      "expected_contract": {
+        "research_experiment": {
+          "hypothesis": "mom_20_1 retains cross-sectional alpha in A market at horizon 5",
+          "data_scope": "market=A;universe=user_watchlist_survivorship_biased;run_id=fr_fixture_train_only;horizon=5",
+          "feature_set": ["mom_20_1"],
+          "train_validation_test": "time_split",
+          "costs_included": "yes",
+          "robustness_checks": ["no_lookahead_fac_shift>=1", "survivorship_current_constituents"],
+          "failure_modes": [],
+          "decision_use": "hypothesis_only",
+          "module_signal": {"module": "quant_robustness", "max_action_level": "L0", "position_multiplier": 0.0, "hard_veto": false, "reason": "train_only"}
+        },
+        "factor_validation": {
+          "random_ic_mean": 0.001,
+          "alpha_t": 4.0,
+          "n_factors_scanned": 1,
+          "state": "train_only",
+          "threshold": 3.5,
+          "train": {"mean_ic": 0.04, "alpha_t": 3.5},
+          "test": {"mean_ic": 0.004, "alpha_t": 3.499}
+        }
+      }
+    }
+  ],
+  "no_order_execution": true
+}

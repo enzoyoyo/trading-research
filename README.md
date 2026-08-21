@@ -23,6 +23,8 @@ An open-source, **research-only** agent skill that turns multi-market evidence i
 | 数据源过期或密钥缺失仍硬答 | 缺配置 / 缺证据 fail-closed；日志脱敏，不打印密钥 |
 | 研究工具误变成下单机器人 | 默认 `no_order_execution`；开源安全层拒绝实盘开关 |
 
+**v2.59 新增**：可复现因子研究/分位回测与盘前筛选、A 股情绪周期、财报期权定位/隐含波动分布和历史反应工具；全部保持 research-only。
+
 覆盖范围概览：A/H/美股、行业与宏观 overlay、ETF、期权/Gamma、OKX public/read-only 与 tokenized stock 研究、事件驱动、财报电话会、多源检索、模拟仓复盘辅助。
 
 ### 适用于谁
@@ -88,6 +90,9 @@ An open-source, **research-only** agent skill that turns multi-market evidence i
 | `scripts/okx_public_snapshot.py` | OKX 公共行情（无密钥） |
 | `scripts/okx_execution_supervisor.py` | OKX 监督投影（分析-only，不下单） |
 | `scripts/options_gamma.py` / `dispersion_crowding.py` | CBOE 期权结构 / 拥挤离散度 |
+| `scripts/factor_panel.py` / `factor_engine.py` / `factor_backtest.py` / `factor_verdict.py` | 因子面板、IC、分位回测与严格裁决 |
+| `scripts/premarket_screen.py` / `a_share_sentiment_cycle.py` / `data_freshness_guard.py` | 盘前筛选、A 股情绪周期与新鲜度护栏 |
+| `scripts/options_positioning_snapshot.py` / `earnings_move_history.py` / `earnings_implied_distribution.py` | 财报期权定位、历史反应与隐含分布 |
 | `scripts/polymarket_signal.py` | 预测市场概率（只作 pricing prior） |
 | `scripts/decision_compiler.py` / `entry_score.py` / `validate_report.py` | 裁决、展示分、报告契约校验 |
 | `scripts/hypothesis_registry.py` / `prediction_ledger.py` / `trading_memory.py` | 假设/预测/决策记忆 |

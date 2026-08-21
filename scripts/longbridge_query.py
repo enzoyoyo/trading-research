@@ -6,6 +6,7 @@ import sys
 import json
 import argparse
 import subprocess
+import shutil
 from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime
@@ -69,10 +70,10 @@ def get_ctx():
 
 def longbridge_bin():
     """Resolve the local LongBridge CLI for SDK-free read-only fallback."""
-    bin_path = os.environ.get('LONGBRIDGE_BIN') or shutil.which('longbridge')
-    if not bin_path:
-        raise RuntimeError('longbridge CLI not found; set LONGBRIDGE_BIN or install on PATH')
-    return bin_path
+    candidate = os.environ.get('LONGBRIDGE_BIN') or shutil.which('longbridge')
+    if not candidate:
+        raise RuntimeError('LongBridge CLI not found; install `longbridge`, add it to PATH, or set LONGBRIDGE_BIN')
+    return candidate
 
 
 def run_cli_json(args, timeout=180):

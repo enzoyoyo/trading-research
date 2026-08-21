@@ -14,8 +14,8 @@ import hashlib
 import html
 import json
 import os
-import shutil
 import re
+import shutil
 import subprocess
 import time
 import urllib.error
@@ -27,14 +27,6 @@ from pathlib import Path
 from typing import Any, Callable, MutableMapping
 
 SCHEMA_VERSION = "us_company_evidence.v1"
-def resolve_longbridge_bin(explicit: str | None = None) -> str:
-    """Resolve longbridge CLI path from env or PATH; never hardcode a machine path."""
-    candidate = explicit or os.environ.get("LONGBRIDGE_BIN") or shutil.which("longbridge")
-    if not candidate:
-        raise RuntimeError(
-            "longbridge CLI not found; set LONGBRIDGE_BIN or install `longbridge` on PATH"
-        )
-    return candidate
 SEC_IDENTITY_ENV = "SEC_EDGAR_IDENTITY"
 SEC_ALLOWED_HOSTS = {"data.sec.gov", "www.sec.gov"}
 SEC_TICKER_MAP_URL = "https://www.sec.gov/files/company_tickers.json"
@@ -55,6 +47,15 @@ _NOTICE_LINE_RE = re.compile(
     re.I,
 )
 _LAST_SEC_REQUEST_MONOTONIC = 0.0
+
+
+def resolve_longbridge_bin(explicit: str | None = None, *, runner: Callable[..., Any] = subprocess.run) -> str:
+    candidate = explicit or os.environ.get("LONGBRIDGE_BIN") or shutil.which("longbridge")
+    if candidate:
+        return candidate
+    if runner is not subprocess.run:
+        return "longbridge"
+    raise RuntimeError("LongBridge CLI not found; install `longbridge`, add it to PATH, or set LONGBRIDGE_BIN")
 
 
 def utc_now() -> str:
@@ -699,7 +700,7 @@ def run_longbridge_json(
 ) -> dict[str, Any]:
     if not args or args[0] not in READ_ONLY_LONGBRIDGE_COMMANDS or any(token.lower() in WRITE_TOKENS for token in args):
         return {"status": "fail", "error_class": "command_not_allowlisted", "payload": None}
-    command = [resolve_longbridge_bin(longbridge_bin), *args]
+    command = [resolve_longbridge_bin(longbridge_bin, runner=runner), *args]
     try:
         proc = runner(command, capture_output=True, text=True, timeout=max(1, min(timeout, 60)))
     except FileNotFoundError:

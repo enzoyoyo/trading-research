@@ -2,7 +2,7 @@
 """WindClaw bridge for trading-research.
 
 Provides a safe, deterministic wrapper around the WindClaw/Wind financial
-workflows available on the maintainer's machine. The script reads the current WindClaw
+workflows available on the user's machine. The script reads the current WindClaw
 runtime session from environment or WindClaw's local state file, but never
 prints the session id.
 """
@@ -20,7 +20,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-HOME = Path(os.environ.get("HOME") or "${HOME}").expanduser()
+HOME = Path.home()
 WINDCLAW_ROOT = HOME / ".openclaw-windclaw"
 DEFAULT_WORKFLOW_URL = "https://m.wind.com.cn/wstock_share/ai/run_workflow"
 DEFAULT_WEB_MCP_URL = "https://t.wind.com.cn/Wind.MCP.Server/vserver/vserver_windclaw/mcp"

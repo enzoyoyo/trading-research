@@ -1,7 +1,7 @@
 # LongBridge Paper Trading Gate
 
 ## Purpose
-Allow simulated / paper-trading experiments without ever touching the live brokerage account. This reference is mandatory when the user asks to connect LongBridge 模拟仓, paper account, 自动模拟交易, or daily portfolio experiments.
+Allow simulated / paper-trading experiments without ever touching the live brokerage account. This reference is mandatory when 用户 asks to connect LongBridge 模拟仓, paper account, 自动模拟交易, or daily portfolio experiments.
 
 ## Hard boundary
 - Live account order execution is always forbidden.
@@ -27,7 +27,7 @@ Pass conditions:
 Fail conditions:
 - `account_channel == "lb"` or missing → live/default account. Stop.
 - OAuth/CLI/MCP auth cannot prove paper status → stop.
-- Paper funds are unavailable/invalid → stop and ask the maintainer to enable/reset in LongBridge developer center.
+- Paper funds are unavailable/invalid → stop and ask the user to enable/reset in LongBridge developer center.
 - If a token created under the paper-only HOME resolves to an Integrated A/C / live `H...` account, treat it as a contaminated candidate: delete that isolated token immediately and restart auth. Never keep a live token inside the paper profile.
 
 ## Device-flow pitfall
@@ -44,7 +44,7 @@ Correct sequence:
 Official docs state: paper and live accounts share App Key & Secret but use different Access Tokens; trading permissions are tied to the Access Token.
 
 Default setup:
-1. The maintainer opens `https://open.longbridge.com/dashboard/`.
+1. the user opens `https://open.longbridge.com/dashboard/`.
 2. Enable paper account / 模拟账户 in Developer Center.
 3. Generate a paper account Agent Auth Code or paper Access Token.
 4. Store paper credentials in an isolated location, never overwriting the live CLI token:

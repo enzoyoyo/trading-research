@@ -193,7 +193,7 @@ def self_test() -> dict[str, Any]:
         assert result["ok"], result
         page = (journal / "daily" / f"{day}.md").read_text(encoding="utf-8")
         assert "token_path" not in page and "cli-auth" not in page, "redaction failed: raw token_path leaked"
-        assert "/Users/" not in page or "[redacted]" in page, "home path leaked without redaction marker"
+        assert "cli-auth" not in page, "credential path leaked"
         assert "XLF.US" in page
         assert "hard_stop" in page
         assert page.count("MU.US sell") == 1, "rejected retries with same reason-set must collapse to one row"

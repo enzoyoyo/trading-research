@@ -1,6 +1,6 @@
 # Trading Laws · 交易纪律速查（源文精确版）
 
-> 蒸馏自 `个人交易法` KB 正文（原文归档在 `${HOME}/Documents/trading-research-notes/source-archive`）。
+> 蒸馏自私有研究档案（原始本地路径未公开）。
 > 这里只放**可直接执行的量化纪律**；方法论展开见各 method 文件与 `unified-research-framework.md`。
 
 ## 游资情绪（炒股养家 / Asking / 退学炒股 / 小群哥 / 复盘V2.0 共识）

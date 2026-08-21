@@ -13,8 +13,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validate_report  # noqa: E402
 
-KOL_TEST_NOW = datetime(2026, 8, 2, tzinfo=UTC)
-KOL_TEST_NOW_CLI = "2026-08-02T00:00:00Z"
+KOL_TEST_NOW = datetime(2026, 8, 22, tzinfo=UTC)
+KOL_TEST_NOW_CLI = "2026-08-22T00:00:00Z"
 
 
 class ReportCanonicalizationRegressionTests(unittest.TestCase):
@@ -25,7 +25,7 @@ class ReportCanonicalizationRegressionTests(unittest.TestCase):
         )
         text = text.replace(
             "- stale_after: 2026-06-12 收盘后",
-            "- stale_after: 2026-08-10T00:00:00Z",
+            "- stale_after: 2026-08-31T00:00:00Z",
         ).replace(
             "- review clock: 每周收盘后复盘",
             "- review clock: 每周收盘后复盘\n"

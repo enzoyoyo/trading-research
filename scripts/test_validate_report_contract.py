@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import validate_report  # noqa: E402
 
-KOL_TEST_NOW = datetime(2026, 8, 2, tzinfo=UTC)
+KOL_TEST_NOW = datetime(2026, 8, 22, tzinfo=UTC)
 
 
 class ReportCoverageContractTests(unittest.TestCase):
@@ -25,7 +25,7 @@ class ReportCoverageContractTests(unittest.TestCase):
         )
         report_text = report_text.replace(
             "- stale_after: 2026-06-12 收盘后",
-            "- stale_after: 2026-08-10T00:00:00Z",
+            "- stale_after: 2026-08-31T00:00:00Z",
         ).replace(
             "- review clock: 每周收盘后复盘",
             "- review clock: 2026-08-07T20:00:00Z weekly close review\n"
@@ -97,7 +97,7 @@ class ReportCoverageContractTests(unittest.TestCase):
         )
         report_text = report_text.replace(
             "- stale_after: 2026-06-12 收盘后",
-            "- stale_after: 2026-08-10T00:00:00Z",
+            "- stale_after: 2026-08-31T00:00:00Z",
         )
         report_text = report_text.replace(
             "TSLA：行动等级 L1 试错/观察；新钱不追；若已持有，保留核心但不加。",
@@ -850,7 +850,7 @@ class ReportCoverageContractTests(unittest.TestCase):
 
     def test_purpose_bound_report_rejects_blank_freshness_values(self) -> None:
         mutations = {
-            "stale_after": ("stale_after: 2026-08-10T00:00:00Z", "stale_after: ", "report_freshness_stale_after_missing"),
+            "stale_after": ("stale_after: 2026-08-31T00:00:00Z", "stale_after: ", "report_freshness_stale_after_missing"),
             "must_refresh_if": (
                 "must_refresh_if: 财报/指引更新；跌破关键位未收回；宏观四象限转 defend；核心 falsifier 出现",
                 "must_refresh_if: ",
@@ -875,14 +875,14 @@ class ReportCoverageContractTests(unittest.TestCase):
     def test_purpose_bound_report_requires_single_freshness_declarations(self) -> None:
         mutations = {
             "stale_after_identical": (
-                "stale_after: 2026-08-10T00:00:00Z",
-                "stale_after: 2026-08-10T00:00:00Z\n"
-                "- stale_after: 2026-08-10T00:00:00Z",
+                "stale_after: 2026-08-31T00:00:00Z",
+                "stale_after: 2026-08-31T00:00:00Z\n"
+                "- stale_after: 2026-08-31T00:00:00Z",
                 "report_freshness_stale_after_declaration_count",
             ),
             "stale_after_conflicting": (
-                "stale_after: 2026-08-10T00:00:00Z",
-                "stale_after: 2026-08-10T00:00:00Z\n"
+                "stale_after: 2026-08-31T00:00:00Z",
+                "stale_after: 2026-08-31T00:00:00Z\n"
                 "- stale_after: 2026-08-01T00:00:00Z",
                 "report_freshness_stale_after_declaration_count",
             ),
@@ -933,7 +933,7 @@ class ReportCoverageContractTests(unittest.TestCase):
                 root = Path(tmp)
                 report, bundle = self.purpose_bound_report_fixture(root)
                 report.write_text(
-                    report.read_text(encoding="utf-8").replace("2026-08-10T00:00:00Z", value),
+                    report.read_text(encoding="utf-8").replace("2026-08-31T00:00:00Z", value),
                     encoding="utf-8",
                 )
                 output = io.StringIO()
@@ -957,12 +957,12 @@ class ReportCoverageContractTests(unittest.TestCase):
             self.assertIn(expected, output.getvalue())
 
     def test_purpose_bound_report_accepts_date_only_and_rfc3339_stale_after(self) -> None:
-        for stale_after in ("2026-08-10", "2026-08-10T12:30:00+08:00"):
+        for stale_after in ("2026-08-31", "2026-08-31T12:30:00+08:00"):
             with self.subTest(stale_after=stale_after), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 report, bundle = self.purpose_bound_report_fixture(root)
                 report.write_text(
-                    report.read_text(encoding="utf-8").replace("2026-08-10T00:00:00Z", stale_after),
+                    report.read_text(encoding="utf-8").replace("2026-08-31T00:00:00Z", stale_after),
                     encoding="utf-8",
                 )
                 output = io.StringIO()
@@ -1055,8 +1055,8 @@ class ReportCoverageContractTests(unittest.TestCase):
             report, bundle = self.purpose_bound_report_fixture(root)
             report.write_text(
                 report.read_text(encoding="utf-8").replace(
-                    "stale_after: 2026-08-10T00:00:00Z",
-                    "stale_after: 2026-08-10 arbitrary-unparseable-suffix",
+                    "stale_after: 2026-08-31T00:00:00Z",
+                    "stale_after: 2026-08-31 arbitrary-unparseable-suffix",
                 ),
                 encoding="utf-8",
             )

@@ -56,7 +56,7 @@ A 股 ETF 期权（50ETF/300ETF/500ETF）、可转债（双低框架+强赎条�
 打新申购本身是低风险的申购流程类问题（中签概率、申购上限、申购日期），不是仓位风险决策，**不需要走完整 Decision Compiler 管线**——按 Tier 0/1 直答格式处理：
 
 ```
-你好，{{BOND_NAME}} 今日可申购，申购代码 {{CODE}}，申购上限 {{LIMIT}} 张，正股 {{UNDERLYING}} 现价 {{PRICE}}/转股价 {{CONV_PRICE}}（转股价值 {{CONV_VALUE}}）。
+用户，{{BOND_NAME}} 今日可申购，申购代码 {{CODE}}，申购上限 {{LIMIT}} 张，正股 {{UNDERLYING}} 现价 {{PRICE}}/转股价 {{CONV_PRICE}}（转股价值 {{CONV_VALUE}}）。
 
 数据时间：{{DATA_TIMESTAMP}}；来源：AkShare bond_zh_cov
 ```

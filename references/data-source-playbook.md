@@ -2,7 +2,7 @@
 
 > 原则：**只用本机实测可跑的数据源**。每个数据点都要能复现来源与时间戳；取数失败一律写「缺口」，绝不补数字。
 > 本 skill 跨 Agent 通用（Hermes / Claude Code / Codex）。Hermes 侧优先用 Longbridge MCP（145工具）→ CLI → SDK 三层降级；A 股遇到 LongBridge/AkShare/WindClaw 缺口时，用 **a-stock-data 直连公开源桥接**（腾讯/东财/巨潮）补证；其它环境保留 **AkShare（Python）** 与 **LongBridge CLI** 直连。
-> **鉴权铁律**：任何数据源 token/鉴权过期不得静默跳过——必须立即打开浏览器/login 让维护者续期（详见 SKILL.md §数据源鉴权续期）。
+> **鉴权铁律**：任何数据源 token/鉴权过期不得静默跳过——必须立即打开浏览器/login 让 用户 续期（详见 SKILL.md §数据源鉴权续期）。
 
 ## 0. 通用步骤
 
@@ -14,7 +14,7 @@
 6. 工具取数失败 → 写「影响判断的关键缺口」，不脑补。**若是鉴权过期导致 → 先触发续期，不要立刻降级为缺口。**
 7. 资讯覆盖不足 → 先生成 `multi_source_search.py` plan，明确 provider 和查询外发范围；确认不是敏感查询后才加 `--allow-external-search`。候选必须回抓原文才能入 Evidence Ledger。
 8. 多标的/跨市场研究 → 用 `scripts/intelligence_coverage.py` 编译每个 `target × dimension` 的 capability/coverage/DataGap；按 high→medium→low criticality round-robin 补抓，禁止把 unsupported/error 写成 0 或“无事件”。
-9. 跨 agent 环境优先使用绝对路径：LongBridge `${HOME}/.local/bin/longbridge`；AkShare Python `/opt/homebrew/bin/python3` 或 `AKSHARE_PYTHON`；Hermes `${HOME}/.local/bin/hermes` 或 `HERMES_BIN`。
+9. 跨 agent 环境通过 PATH 或环境变量解析：LongBridge 用 `LONGBRIDGE_BIN`，AkShare Python 用 `AKSHARE_PYTHON`，Hermes 用 `HERMES_BIN`；缺失时明确报错。
 
 ## 1. 本机已验证数据源能力矩阵
 
@@ -23,7 +23,7 @@
 | **AkShare** | Python 包（运行时验证） | A/港/美行情K线、涨停/炸板/龙虎榜、资金流、南向、美债利率 | `python3 -c "import akshare,sys;print(akshare.__version__)"` | eastmoney `push2*` 推送域名走本机代理会断连，需绕代理（见 §2 注意） |
 | **LongBridge MCP** 🆕 | Hermes MCP（OAuth，运行时验证） | A/港/美全维度：选股筛选、财报/估值/行业对比、期权链、组合分析、新闻/公告、市场温度、DCA、预警 | `hermes mcp test longbridge`；并确认当前会话是否有 MCP 工具 | **首选数据层**，145 工具；OAuth token 自动管理，但可用性必须运行时验证 |
 | **LongBridge CLI** | `~/.local/bin/longbridge`（运行时验证） | A/港/美实时行情、K线、盘前盘后、组合/持仓；美股财报、估值、filing、Form 4、股东、显式机构 13F | `longbridge check` / `longbridge auth status` | 设备流授权（`auth login`），token 存 `~/.longbridge/openapi/tokens/`，自动复用；**永不输出 token**；美股公司证据由 `us_company_evidence.py` 做只读归一化 |
-| **LongBridge script wrapper** 🆕 | `scripts/longbridge_query.py`（SDK 优先，SDK 缺失/超时自动 CLI fallback） | 行情/K线；SDK 可用时另含盘口/交易时段 | `python3 scripts/longbridge_query.py quote TSLA.US --json` | 供本 skill 脚本稳定取数；自动从 `~/.config/longbridge/.env` 映射 `LONGBRIDGE_* → LONGPORT_*`，但 SDK 连接失败时改走 `${HOME}/.local/bin/longbridge` |
+| **LongBridge script wrapper** 🆕 | `scripts/longbridge_query.py`（SDK 优先，SDK 缺失/超时自动 CLI fallback） | 行情/K线；SDK 可用时另含盘口/交易时段 | `python3 scripts/longbridge_query.py quote TSLA.US --json` | 供本 skill 脚本稳定取数；自动从 `~/.config/longbridge/.env` 映射 `LONGBRIDGE_* → LONGPORT_*`，但 SDK 连接失败时改走 PATH / `LONGBRIDGE_BIN` 中的 `longbridge` |
 | **SEC EDGAR 官方 API** | `scripts/us_company_evidence.py`（stdlib only、按需） | `company_tickers.json` exact ticker→CIK、submissions、accession/原始 URL、修订申报、XBRL companyfacts | `python3 scripts/us_company_evidence.py AAPL --json`；identity 缺失应返回 `identity_missing` | 免费、无商业 key；需 `SEC_EDGAR_IDENTITY` 联系身份，1 req/s、6h 私有缓存；与 LongBridge 同 accession 不算第二来源 |
 | **a-stock-data bridge** 🆕 | `scripts/a_stock_data_bridge.py`（零第三方依赖直连公开源） | A 股腾讯行情/PE/PB/市值/涨跌停、东财板块归属/分钟资金流、巨潮公告动态 orgId | `python3 scripts/a_stock_data_bridge.py health --json` | 来源 `simonlin1212/a-stock-data` v3.2.2；默认中国源直连不走代理；东财只用于独有数据且限流，不能单独提高动作等级 |
 | **CBOE delayed**（`scripts/options_gamma.py`） | 内部脚本 | 美股期权/Gamma：Put Wall/Call Wall/Gamma Flip/GEX | `python3 scripts/options_gamma.py AVGO --json` | 免 key，约15分钟延迟；yfinance+BS 仅兜底 |
@@ -64,7 +64,7 @@ python3 scripts/a_stock_data_bridge.py fund-flow 000858.SZ --limit 20 --json
 
 ## 2b. AkShare 实测用法（A 股广覆盖兜底）
 
-**代理注意**：若运行环境设置了 `HTTP(S)_PROXY`（任何本地代理），eastmoney 行情/推送域名经代理常 `RemoteDisconnected`。取数时绕开代理并重试：
+**代理注意**：本机设了 `HTTP(S)_PROXY=http://127.0.0.1:8118`，eastmoney 行情/推送域名经代理常 `RemoteDisconnected`。取数时绕开代理并重试：
 
 ```bash
 # 绕代理跑 akshare（eastmoney 为国内直连，无需代理）
@@ -167,7 +167,7 @@ longbridge capital 600487.SH --flow --format json  # 资金流向
 longbridge market-temp CN --format json          # 市场温度（CN/HK/US）
 ```
 
-绝对路径用法（subprocess/Python 找不到 `longbridge` 时）：`${HOME}/.local/bin/longbridge <子命令>`。
+若 PATH 找不到 `longbridge`，设置 `LONGBRIDGE_BIN="${HOME}/.local/bin/longbridge"` 后再运行。
 
 - 符号格式：`TSLA.US` / `700.HK` / `600519.SH` / `300846.SZ`。`--format json` 便于解析。
 - LongBridge 优先作为**实时行情/交易时段/盘前盘后/可用时期权链**源；A 股短线结构（涨停/连板/龙虎榜）仍以 AkShare 为主。

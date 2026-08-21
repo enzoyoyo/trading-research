@@ -1,7 +1,7 @@
 ---
 name: trading-research
 description: Use when the user asks for A/H/US stock, OKX public/read-only or tokenized-stock research, sector, macro, quant/backtest, options/Gamma, ETF, earnings-call, rates/FX/crypto overlay, A-share derivatives, Grok/X/web live signals, portfolio risk, execution supervision, or skill maintenance that must turn evidence into risk-bounded decisions without order execution.
-version: v2.57-public
+version: v2.59
 ---
 
 # trading-research
@@ -10,7 +10,6 @@ version: v2.57-public
 - 把「单票叙事、宏观结构、内生拥挤、Gamma/VRP、参与者流、账户约束」编译成统一动作等级和风险边界；研究、复盘、校准、自优化全部走可复现的结构化流程。
 - 覆盖 A/H/美股个股、行业、指数、组合、ETF、期权/Gamma、A 股衍生品、OKX public/read-only 与 Unified Tokenized Stocks、宏观/政策/利率/FX/加密 overlay、事件驱动、财报电话会、Grok/X/web live signals、模拟仓复盘与决策记忆。
 - 默认 `no_order_execution`：只输出研究结论、风险边界、仓位上限、复盘时钟；不执行真实交易。
-- 本文件只保留当前执行规则；以 `version` frontmatter 标识发布版本。
 
 ## Query Tier Router
 | Tier | 触发判据 | 执行路径 |
@@ -39,6 +38,7 @@ version: v2.57-public
 按域分组；每行「用途 → 文件」。references/ 与 scripts/ 前缀省略。
 
 ### 数据与行情
+- 公开配置加载与安全状态检查（仅环境变量/示例配置，不回显密钥）→ `config_loader.py`
 - LongBridge 主数据层（行情/财报/估值/监管申报/Form 4/股东/显式机构 13F/组合/期权/新闻）与免费 SEC EDGAR 缺口兜底 → `data-source-playbook.md`；`longbridge_query.py`、`us_company_evidence.py`、`security_resolver.py`（标的解析）、`market_router.py`（市场路由）、`fundamental_snapshot.py`
 - A 股公开源补强（腾讯/东财/巨潮）与备用交叉验证 → `a-stock-data-source-layer.md`、`windclaw-a-share-bridge.md`、`a-share-short-term-layer.md`；`a_stock_data_bridge.py`、`windclaw_bridge.py`
 - A 股情绪周期专项（涨跌停生态/连板梯队/板块扩散/情绪阶段/资金流状态；仅 A 股短线按需加载）→ `a-share-sentiment-cycle.md`；`a_share_sentiment_cycle.py`
@@ -64,7 +64,6 @@ version: v2.57-public
 - KOL 公开方法十阶段 handoff（缺字段 fail-closed，自报战绩不加可信度）→ `kol_method_card.py`；`templates/kol-method-cards-public-ledger.json`
 - 正式报告、行动判断、旧结论复用、材料摄入质量门 → `mira-quality-gates.md`
 - 证据采集执行器 → `evidence_run.py`
-- 开源配置加载、密钥脱敏与实盘拒绝（缺配置 fail-closed，从不打印密钥值）→ `config_loader.py`；`.env.example`、`config.example.yaml`
 
 ### 裁决与风控
 - module_signal → 动作等级、仓位倍率、hard veto；Cap & Tighten-Only Registry 唯一权威 → `decision-compiler.md`、`decision-cascade.md`；`decision_compiler.py`
@@ -91,10 +90,12 @@ version: v2.57-public
 - 美股隔夜执行窗与横截面排序（只降级/排序/提 watch priority）→ `us-close-to-open-execution-overlay.md`、`overnight-ensemble-ranker.md`
 - 短周期结构层（09:40 连续性、SPX gamma、期权执行质量、EOD 复盘调权；只判当日可执行性）→ `short-cycle-market-structure-overlay.md`；`short_cycle_structure.py`、`short_cycle_signals.py`、`short_cycle_review.py`
 - 第三方期权 flow 告警/sweep 截图 → `options-flow-sweep-gate.md`
-- 财报期权方向/幅度/隐含波动/LLM 历史重放的 point-in-time 与校准门 → `earnings-event-options-prediction-gate.md`
+- 财报期权方向/幅度/隐含波动/LLM 历史重放的 point-in-time 与校准门、v2.59 可复现计算口径 → `earnings-event-options-prediction-gate.md`；`options_positioning_snapshot.py`、`earnings_move_history.py`、`earnings_implied_distribution.py`（CBOE 定位/ATM straddle 与 SEC 8-K + LongBridge session-aligned 历史反应；只读、零方向权重、零仓位）
 - 多周期预测分账（盘中/隔夜/波段/中长期不得共用一个分数；缺 horizon 则不交易）→ `multi-horizon-prediction-contract.md`
 - 信号融合与风险预算一致门（禁止平均加分；条件交叉；冲突则收缩预算）→ `signal-fusion-risk-budget.md`
 - 回测/因子/模型审查与 IC 类证据严格门 → `open-source-quant-research-patterns.md`、`factor-validation-strict-gate.md`
+- 因子研究执行器（qfq 面板、逐截面预处理、IC 随机对照、分位回测、四态裁决、survivorship 天花板；只研究不裁决）→ `factor-research-engine.md`；`factor_panel.py`、`factor_engine.py`、`factor_backtest.py`、`factor_verdict.py`
+- 盘前因子筛选与部署编排（confirmed_alive-only 整数 vote、freshness 前置、US/A 股/盘中分线；只产 watch priority 与 tighten-only 风险信号）→ `factor-deployment-playbook.md`；`premarket_screen.py`
 - 群体模拟只进 hypothesis/scenario_prior → `mirofish-swarm-simulation-patterns.md`
 
 ### 记忆·校准·复盘
@@ -141,7 +142,7 @@ version: v2.57-public
 每次需要出网的研究查询，必须将 AnySearch 与 LongBridge/交易所/公司IR/`web_search`/Grok/`multi_source_search.py` 同批联动运行，不能以任一主源成功为由跳过；纯本地计算、用户给定材料只读分析、Tier 0 取已有行情值除外。finance/social_media 等垂直意图先 `get_sub_domains` 发现子域再追加垂直检索。
 
 ```bash
-ANYSEARCH="python3 ${HOME}/.agents/skills/anysearch/scripts/anysearch_cli.py"   # 先读 runtime.conf
+ANYSEARCH="${ANYSEARCH_BIN:-anysearch}"   # install on PATH or set ANYSEARCH_BIN
 $ANYSEARCH batch_search --queries '[{"query":"<公开查询>","max_results":5},{"query":"<公开查询>","domain":"finance","sub_domain":"<sub>","sub_domain_params":"<k=v>"}]'
 $ANYSEARCH extract "<publisher-url>"   # 只对候选原文回抓
 ```
@@ -173,6 +174,10 @@ python3 scripts/validate_skill.py --all
 # 分项参考：
 python3 scripts/record_due_results.py --self-test
 python3 scripts/prediction_ledger.py --self-test
+python3 scripts/options_positioning_snapshot.py --self-test
+python3 scripts/earnings_move_history.py --self-test
+python3 scripts/earnings_implied_distribution.py --self-test
+python3 -m unittest scripts/test_options_positioning_snapshot.py scripts/test_earnings_move_history.py scripts/test_earnings_implied_distribution.py scripts/test_fundamental_snapshot.py -v
 python3 scripts/provenance_guard.py --bundle templates/research-provenance-bundle-pass.json --pretty
 python3 scripts/provenance_guard.py --bundle templates/kol-method-cards-public-ledger.json --pretty
 python3 scripts/paper_outcome_calibration_feed.py --self-test
@@ -186,6 +191,12 @@ python3 scripts/data_retention.py --self-test
 python3 scripts/data_freshness_guard.py --self-test
 python3 scripts/a_share_sentiment_cycle.py --self-test
 python3 -m unittest scripts/test_a_share_sentiment_cycle.py -v
+python3 scripts/factor_panel.py --self-test
+python3 scripts/factor_engine.py --self-test
+python3 scripts/factor_backtest.py --self-test
+python3 scripts/factor_verdict.py --self-test
+python3 scripts/premarket_screen.py --self-test
+python3 -m unittest discover -s scripts -p "test_factor*.py"
 python3 scripts/output_quality_regression.py
 python3 scripts/validate_skill.py
 python3 scripts/validate_scenarios.py
@@ -204,4 +215,3 @@ Paper 校准闭环 pitfall：`paired_samples=0` 不等于「完成」。三种�
 - `trading-research` 是统一投研主 skill；本 skill 无子 skill 目录，Claude Code 只注册顶层本文件。
 - 新能力优先并入 `references/*`、`scripts/*`、`templates/*`，不得新增第二套动作等级或绕过主流程，也不得新建嵌套 `SKILL.md`。
 - System A（LongBridge paper-trading 自动化）的运维 runbook 在 `~/.hermes/longbridge-paper-trading/docs/runbooks/`，不在本 skill 目录内维护。
-- 执行规则以本文件、对应 references、scripts 为准。

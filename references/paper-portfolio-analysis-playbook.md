@@ -1,6 +1,6 @@
 # Paper Portfolio Analysis Playbook
 
-Use this reference when the user asks to analyze LongBridge/System A 模拟仓, pick the highest-win-rate US ticket, or rank current paper holdings by alpha.
+Use this reference when 用户 asks to analyze LongBridge/System A 模拟仓, pick the highest-win-rate US ticket, or rank current paper holdings by alpha.
 
 ## Objective
 Produce a read-only decision memo from the paper portfolio state. Do not submit/cancel/replace orders. Treat the paper system as evidence and state, not as permission to trade.

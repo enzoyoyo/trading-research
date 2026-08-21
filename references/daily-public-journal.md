@@ -56,7 +56,7 @@ Any composed line containing `token`, `credential`, `auth`, or the literal absol
 
 ## Publish policy
 
-`--publish` runs `git init` (idempotent, first run only) inside `~/.hermes/trading-journal/` if it is not already a repo, then `git add -A && git commit` locally after a successful compose. It never pushes. A `--push` flag exists in the CLI for the maintainer's later use once a remote is configured by hand; this skill's own automation (Daily Loop step 8) never passes `--push`.
+`--publish` runs `git init` (idempotent, first run only) inside `~/.hermes/trading-journal/` if it is not already a repo, then `git add -A && git commit` locally after a successful compose. It never pushes. A `--push` flag exists in the CLI for the user's own later use once a remote is configured by hand; this skill's own automation (Daily Loop step 8) never passes `--push`.
 
 ## Boundaries
 
