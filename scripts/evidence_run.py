@@ -29,17 +29,17 @@ except ImportError:
     classify = None
 
 LONGBRIDGE_BIN = os.environ.get("LONGBRIDGE_BIN") or shutil.which("longbridge")
-
-def ensure_longbridge() -> str:
-    if not LONGBRIDGE_BIN:
-        raise RuntimeError("longbridge CLI not found; set LONGBRIDGE_BIN or install on PATH")
-    return LONGBRIDGE_BIN
-
-AKSHARE_PYTHON = os.environ.get("AKSHARE_PYTHON") or "/opt/homebrew/bin/python3"
+AKSHARE_PYTHON = os.environ.get("AKSHARE_PYTHON") or sys.executable
 SECRET_RE = re.compile(r"(?i)(token|secret|api[_-]?key|access[_-]?token)[=:]\s*[^\s,]+")
 COMMANDS_RUN: list[dict[str, Any]] = []
 FILING_EID_BASE = 300
 FILING_EID_MAX = 8
+
+
+def require_longbridge_bin() -> str:
+    if LONGBRIDGE_BIN:
+        return LONGBRIDGE_BIN
+    raise RuntimeError("LongBridge CLI not found; install `longbridge`, add it to PATH, or set LONGBRIDGE_BIN")
 
 
 def now() -> str:
@@ -276,7 +276,7 @@ def longbridge_quote(identity: dict[str, Any]) -> tuple[dict[str, Any], dict[str
     sym = identity.get("longbridge_symbol")
     if not sym:
         return source_health("LongBridge", "skipped", "no longbridge symbol"), None, {"gap": "LongBridge symbol unavailable", "impact": "无法抓实时行情", "fallback": "AkShare/web 兜底", "severity": "medium"}
-    cmd = [ensure_longbridge(), "quote", str(sym), "--format", "json"]
+    cmd = [require_longbridge_bin(), "quote", str(sym), "--format", "json"]
     res = run_cmd(cmd, timeout=30)
     if res.get("status") != "pass":
         return source_health("LongBridge", "fail", res.get("error") or res.get("stderr") or "quote failed", error_class=res.get("error") or "subprocess_fail"), None, {"gap": "LongBridge quote failed", "impact": "行情新鲜度下降", "fallback": "AkShare/Yahoo/web", "severity": "high"}

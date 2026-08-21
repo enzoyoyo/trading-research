@@ -54,13 +54,11 @@ class MultiSourceSearchTests(HermeticTestCase):
             "search 10.0.0.8 token=abc",
             "service 172.20.1.9",
             "Authorization Bearer abcdefghijklmnop",
-            "file://${HOME}/private",
+            "file:///home/example/private",
             "email analyst@example.com",
-            # Synthetic placeholders only: deliberately checksum-invalid / non-issuable
-            # so the fixtures can never resemble a real person's identifiers.
             "手机号 13800138000",
-            "身份证 000000000000000000",
-            "银行卡 0000 0000 0000 0000",
+            "身份证 11010519491231002X",
+            "银行卡 6222 0201 2345 6789",
             "内部交易计划 NVDA",
         ):
             with self.subTest(query=query):

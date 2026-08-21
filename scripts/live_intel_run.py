@@ -21,13 +21,13 @@ DEFAULT_HERMES_MODEL = os.environ.get("HERMES_GROK_MODEL", "grok-4.3")
 DEFAULT_HERMES_PROVIDER = os.environ.get("HERMES_GROK_PROVIDER", "xai-oauth")
 DEFAULT_HERMES_TOOLSETS = os.environ.get("HERMES_LIVE_INTEL_TOOLSETS", "web")
 HERMES_BIN = os.environ.get("HERMES_BIN") or shutil.which("hermes")
-
-def ensure_hermes() -> str:
-    if not HERMES_BIN:
-        raise RuntimeError("hermes CLI not found; set HERMES_BIN or install on PATH")
-    return HERMES_BIN
-
 SEARCH_FALLBACK_SCRIPT = ROOT / "scripts" / "multi_source_search.py"
+
+
+def require_hermes_bin() -> str:
+    if HERMES_BIN:
+        return HERMES_BIN
+    raise RuntimeError("Hermes CLI not found; install `hermes`, add it to PATH, or set HERMES_BIN")
 
 
 def market_of(query: str) -> dict[str, Any]:
@@ -154,7 +154,7 @@ def hermes_command(prompt: str, model: str, provider: str, toolsets: str = DEFAU
     # Keep live-intel child agents under the provider tool limit. Without an
     # explicit toolset, Hermes may load the full desktop profile (200+ tools)
     # and xAI rejects the request before Grok can answer.
-    return [ensure_hermes(), "chat", "-Q", "-t", toolsets, "--provider", provider, "-m", model, "-q", prompt]
+    return [require_hermes_bin(), "chat", "-Q", "-t", toolsets, "--provider", provider, "-m", model, "-q", prompt]
 
 
 def health(model: str, provider: str, timeout: float = 60.0) -> dict[str, Any]:

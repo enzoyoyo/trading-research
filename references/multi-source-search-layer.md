@@ -52,7 +52,7 @@ python3 scripts/multi_source_search.py --self-test
 每个需要外部搜索的研究查询，必须同时运行本层选择的既有提供方与 AnySearch；这不是失败后的兜底。查询必须是公开命题。金融、公告、宏观或社媒意图先用 AnySearch 发现子域，再按返回的必填参数执行垂直检索；一般背景查询至少执行一条 AnySearch 通用检索。AnySearch 失败只写入独立 `source_health/data_gaps`，不阻断其余提供方。
 
 ```bash
-ANYSEARCH="python3 ${HOME}/.agents/skills/anysearch/scripts/anysearch_cli.py"
+ANYSEARCH="${ANYSEARCH_BIN:-anysearch}"
 $ANYSEARCH get_sub_domains --domain finance
 $ANYSEARCH search "NVDA latest earnings guidance" --domain finance --sub_domain finance.news --sdp type=stock,symbol=NVDA,cn_code= --max_results 5
 ```

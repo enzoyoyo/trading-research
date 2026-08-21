@@ -5,7 +5,7 @@ Self-evolution feedback loop C. Loops A and B and the daily ledger each emit
 machine JSON; nobody reads JSON every day. This script is the human-facing
 close of the loop: once a week it aggregates the ledger, the calibration
 scorecard, the decision-memory review and the staged eval candidates into one
-short plain-Chinese digest the maintainer can actually read — what the skill learned,
+short plain-Chinese digest the user can actually read — what the skill learned,
 whether it is fooling itself, and what still needs a human call.
 
 Read-only. No broker access. No trade execution. No file edits to the skill.
@@ -24,7 +24,7 @@ from trading_memory_core import connect, db_path, review_stats, verified_rows
 
 DEFAULT_DIGEST_DIR = Path("~/.hermes/work/trading-research-autoevolve/digests").expanduser()
 
-# Failure tags in plain Chinese — the maintainer reads outcomes, not jargon.
+# Failure tags in plain Chinese — the user reads outcomes, not jargon.
 FAILURE_TAG_PLAIN = {
     "quick_loss": "进场就被快速打损",
     "chase_reversal": "追高/追反转被套",

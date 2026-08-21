@@ -22,9 +22,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 
 # Fixed entries that a directory glob cannot express: the skill root file and
-# the templates/ fixtures (a mix of .md/.json/.jsonl/.txt files, most of which
-# are eval corpora rather than capability-map documentation and so are
-# deliberately excluded from the references/scripts glob below).
+# the templates/ fixtures (a mix of .md/.json/.jsonl/.txt files,
+# most of which are eval corpora rather than capability-map documentation and
+# so are deliberately excluded from the references/scripts glob below).
 STATIC_REQUIRED = [
     "ACCEPT.yml",
     "SKILL.md",
@@ -180,9 +180,8 @@ def frontmatter_checks() -> None:
         fail("frontmatter name must be lowercase letters/numbers/hyphens and cannot start/end with hyphen")
     if len(name) > 64:
         fail("frontmatter name exceeds 64 characters")
-    # Allow `<name>-public` for sanitized distribution checkouts while keeping skill name stable.
-    if ROOT.name != name and ROOT.name != f"{name}-public":
-        fail(f"parent directory name '{ROOT.name}' must match name '{name}' or '{name}-public'")
+    # A public clone may use an arbitrary checkout directory name; SKILL.md is
+    # the canonical package identity, not the local filesystem path.
     if not description:
         fail("frontmatter description is required")
     if len(description) > 1024:
@@ -364,6 +363,8 @@ def offline_checks() -> None:
         "Multi-Horizon Prediction Contract", "horizon_id", "no_trade_if",
         "Signal Fusion & Risk-Budget Agreement", "条件交叉", "risk_budget_scale",
         "gamma_model_conflict", "名义成交额 ≠ 净 gamma",
+        "options_positioning_snapshot.py", "earnings_move_history.py",
+        "earnings_implied_distribution.py", "KMC-BALDER-EARNINGS-RADAR-20260821",
     ]
     for phrase in required_phrases:
         if phrase not in all_md:
@@ -491,7 +492,8 @@ def offline_checks() -> None:
     ])
     expected_cards = {
         "KMC-CITRINI-20260717", "KMC-BALDER-20260717",
-        "KMC-BALDER-20260731-FINAL", "KMC-FRANK-20260717",
+        "KMC-BALDER-20260731-FINAL", "KMC-BALDER-EARNINGS-RADAR-20260821",
+        "KMC-FRANK-20260717",
     }
     kol_memory_link = kol_fixture.get("memory_link", {})
     kol_signal = kol_fixture.get("suggested_module_signal", {})
@@ -525,7 +527,7 @@ def offline_checks() -> None:
         fail(f"trading memory think failed: {memory_think}")
 
     # Self-evolution loops A/B/C + the result-recorder: each ships a deterministic self-test.
-    for script in ("calibration_scorecard.py", "eval_candidate_generator.py", "learning_digest.py", "prediction_ledger.py", "record_due_results.py", "hypothesis_registry.py", "multi_source_search.py", "intelligence_coverage.py"):
+    for script in ("calibration_scorecard.py", "eval_candidate_generator.py", "learning_digest.py", "prediction_ledger.py", "record_due_results.py", "hypothesis_registry.py", "multi_source_search.py", "intelligence_coverage.py", "factor_panel.py", "factor_engine.py", "factor_backtest.py", "factor_verdict.py", "premarket_screen.py", "options_positioning_snapshot.py", "earnings_move_history.py", "earnings_implied_distribution.py"):
         result = run_json([sys.executable, str(SCRIPTS / script), "--self-test"])
         if not result.get("ok") or result.get("self_test") != "passed":
             fail(f"{script} self-test failed: {result}")

@@ -1,7 +1,7 @@
 {
   "schema_version": "research_provenance.v1",
-  "as_of": "2026-08-01T19:36:38Z",
-  "bundle_purpose": {"kind":"kol_method_handoff","target_ids":["KMC-BALDER-20260731-FINAL"],"scope":"One supplied 2026-07-31 Substack email and its single semantic image; no author-wide extrapolation.","decision_use":"watch_only","claim_coverage":"bounded_single_article"},
+  "as_of": "2026-08-21T09:12:00Z",
+  "bundle_purpose": {"kind":"kol_method_handoff","target_ids":["KMC-BALDER-20260731-FINAL"],"scope":"The claim coverage remains bound to the supplied 2026-07-31 Substack artifact; the ledger also carries bounded public method cards, including Balder Earnings Radar, without author-wide extrapolation.","decision_use":"watch_only","claim_coverage":"bounded_single_article"},
   "claim_coverage": {"source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"framework_claim_ids":["FC-BAL-01","FC-BAL-02","FC-BAL-03","FC-BAL-04"],"analysis_claim_ids":["AC-BAL-01","AC-BAL-02","AC-BAL-03","AC-BAL-04"],"accepted_claim_ids":[],"watch_only_claim_ids":["AC-BAL-01","AC-BAL-04"],"context_only_claim_ids":["AC-BAL-02","AC-BAL-03"],"rejected_claim_ids":[],"canonical_eids":[],"target_binding":"KMC-BALDER-20260731-FINAL","reason":"The source is partial, the canonical public DOM is unverified, and no canonical EvidenceItem IDs or independently reproducible signal inputs exist."},
   "research_readiness": {"depth_mode":"deep_dive","information_value":"medium","knowability_status":"partially_knowable","readiness_level":"needs_refresh","readiness_basis":"The public method skeleton is source-grounded, but benchmark, formula, thresholds, publication origin, trade semantics, and independent outcome evidence are missing or conflicted.","blocking_gaps":["canonical public DOM parity is unverified","benchmark and relative-strength formula are undisclosed","tracking inclusion/removal is not verified trade entry/exit","no canonical EvidenceItem IDs or independent outcome ledger","MRVL and NFLX state labels conflict between prose and image"],"stale_after":"2026-08-01T22:11:43Z","must_refresh_if":["a canonical article capture or correction becomes available","the author publishes the benchmark, formula, thresholds, or confirmation-state definitions","independent point-in-time market data or transaction evidence becomes available","any later source resolves the prose/image state conflict"],"max_action_level_cap":"L0","module_signal":{"module":"research_readiness","max_action_level":"L0","position_multiplier":0.0,"hard_veto":false,"tighten_only":true,"reason":"needs_refresh:partial_single_article_and_nonreproducible_signal"}},
   "source_capture_manifest": [{"document_id":"DOC-BALDER-2026-07-31","content_sha256":"93894cf3d46129c89edb12b4a317ef8afd095b420d128de37449f80c64de7469","media_type":"text/plain","source_role":"semantic","disposition":"private_capture_not_distributed","review_locator":"review-index:L-01..L-32","supported_claim_ids":["AC-BAL-01","AC-BAL-02","AC-BAL-04"],"quote_anchor_ids":["Q-BAL-01","Q-BAL-02","Q-BAL-03","Q-BAL-04","Q-BAL-05","Q-BAL-06","Q-BAL-07"],"quote_locators":{"Q-BAL-01":{"review_index":"L-01"},"Q-BAL-02":{"review_index":"L-04"},"Q-BAL-03":{"review_index":"L-06a"},"Q-BAL-04":{"review_index":"L-06b"},"Q-BAL-05":{"review_index":"L-07"},"Q-BAL-06":{"review_index":"L-09"},"Q-BAL-07":{"review_index":"L-11"}}},{"document_id":"DOC-BALDER-IMG-08","content_sha256":"a13382d6c26c793a145ad3690dd3eb321c751ce4ac489cc70c3dd8065900ea81","media_type":"image/png","dimensions":{"width":2000,"height":2180},"source_role":"semantic","disposition":"private_image_capture_not_distributed","review_locator":"review-index:IMG-08","supported_claim_ids":["AC-BAL-01","AC-BAL-03"]}],
@@ -172,7 +172,8 @@
       "redistribution_allowed": "unknown"
     },
     {"document_id":"DOC-BALDER-2026-07-31","source_type":"primary_document","title":"Balder's Position · 2026-07-31","publisher":"Balder's Substack","author":"Balder","published_at":"2026-07-31T22:11:43.278Z","published_time_precision":"exact","retrieved_at":"2026-08-01T19:36:38Z","original_url":"https://baldertrader.substack.com/p/balders-position-2026-07-31","content_sha256":"93894cf3d46129c89edb12b4a317ef8afd095b420d128de37449f80c64de7469","license_scope":"user_provided","storage_scope":"tracked_allowed","redistribution_allowed":"derived_only","access_state":"partial","identity_note":"The captured Substack profile is @balder714059. Its relationship to the pre-existing X handle @Balder13946731 was not reverified and is not used to merge method cards.","publication_time_status":"source_stated_unverified_not_executable_origin","capture_bytes_storage_scope":"private","media_type":"text/plain"},
-    {"document_id":"DOC-BALDER-IMG-08","source_type":"primary_image","title":"Balder 2026-07-31 semantic holdings card","publisher":"Balder's Substack","author":"Balder","published_at":"2026-07-31T22:11:15Z","published_time_precision":"exact","retrieved_at":"2026-08-01T19:36:38Z","original_url":"https://substack-post-media.s3.amazonaws.com/public/images/5495b4bb-b761-4756-b967-e9ad4fe7d3d1_2000x2180.png","content_sha256":"a13382d6c26c793a145ad3690dd3eb321c751ce4ac489cc70c3dd8065900ea81","license_scope":"user_provided","storage_scope":"tracked_allowed","redistribution_allowed":"derived_only","access_state":"partial","derived_from_document_id":"DOC-BALDER-2026-07-31","publication_time_status":"source_header_last_modified_unverified_not_executable_origin","capture_bytes_storage_scope":"private","media_type":"image/png"}
+    {"document_id":"DOC-BALDER-IMG-08","source_type":"primary_image","title":"Balder 2026-07-31 semantic holdings card","publisher":"Balder's Substack","author":"Balder","published_at":"2026-07-31T22:11:15Z","published_time_precision":"exact","retrieved_at":"2026-08-01T19:36:38Z","original_url":"https://substack-post-media.s3.amazonaws.com/public/images/5495b4bb-b761-4756-b967-e9ad4fe7d3d1_2000x2180.png","content_sha256":"a13382d6c26c793a145ad3690dd3eb321c751ce4ac489cc70c3dd8065900ea81","license_scope":"user_provided","storage_scope":"tracked_allowed","redistribution_allowed":"derived_only","access_state":"partial","derived_from_document_id":"DOC-BALDER-2026-07-31","publication_time_status":"source_header_last_modified_unverified_not_executable_origin","capture_bytes_storage_scope":"private","media_type":"image/png"},
+    {"document_id":"KOL-SRC-BALDER-EARNINGS-RADAR","source_type":"methodology_page","title":"Balder Earnings Radar public methodology","publisher":"Balder AI","author":"Balder","published_at":"2026-08-21","published_time_precision":"date_only","retrieved_at":"2026-08-21T09:12:00Z","original_url":"https://balder-ai.com/","access_state":"public","license_scope":"unknown","storage_scope":"tracked_allowed","redistribution_allowed":"derived_only","publication_time_status":"publication_date_unknown; observation date used for required date field","methodology_only":true}
   ],
   "quote_anchors": [{"quote_id":"Q-BAL-01","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"量子计算板块个股的相对强度信号开始转强，IONQ 本期首次进入跟踪范围；而此前纳入观察的 CRCL、ARM 超额收益信号均已转弱，予以移出。","locator":{"review_index":"L-01"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"2872308ebbb506cc1d11a293fa65d83ffde9e9f2faf8fadcaefcf526b09272fe"},{"quote_id":"Q-BAL-02","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"本刊量化引擎监测到该标的相对大盘的超额收益信号首次转强，10 日相对强度读数为 87bp，当前确认档位处于第 0 档","locator":{"review_index":"L-04"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"8b62d41f578e50acbe77fd2fdf4abaada72c0a4fc7066b69ebab1f6474bd57bc"},{"quote_id":"Q-BAL-03","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"一旦有效跌破，下一支撑参考位下移至 31.8，意味着本轮相对强度信号面临证伪","locator":{"review_index":"L-06a"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"4741baf868941da15508213cd6da8b4ac54eca824248132dbb138fcd88d3e4f8"},{"quote_id":"Q-BAL-04","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"若能放量有效突破 38，将是确认档位上调的技术前提","locator":{"review_index":"L-06b"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"a5bff368f3e3c5137432747a5b6abebac1057a8a4e7fca4224d757b3526ffa15"},{"quote_id":"Q-BAL-05","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"尚不构成趋势确认，建议以谨慎跟踪为主，等待确认档位进一步上移或关键位方向明确后再行评估","locator":{"review_index":"L-07"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"210baa5868d50e28552f22247556475a861c132c70e57c0dc7ab5f7891547fb1"},{"quote_id":"Q-BAL-06","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"本期相对强度未见显著边际变化，维持观察，暂不做方向性调整","locator":{"review_index":"L-09"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"a17842ae5b73527915e2fe8a4ce883825a0f0b6f4e859b9f07daacbc8e1d3c81"},{"quote_id":"Q-BAL-07","document_id":"DOC-BALDER-2026-07-31","verbatim_text":"因超额收益信号转弱，移出组合","locator":{"review_index":"L-11"},"speaker":"Balder","quote_use":"internal_evidence","verbatim_sha256":"172c7bcb06d6b26bdf130d116b430b2c29307f57285a454b2899fba346d7464c"}],
   "framework_claims": [{"framework_claim_id":"FC-BAL-01","statement":"The disclosed article can be represented as a relative-signal observation, an ordinal confirmation state, and tracking-state transitions, but it cannot be parameterized from this article.","quote_anchor_ids":["Q-BAL-01","Q-BAL-02","Q-BAL-04","Q-BAL-05"],"derivation_note":"The article names a benchmark-relative signal, tier zero, a necessary upgrade condition, and cautious tracking/removal language. The benchmark, formula, thresholds, state count, and transition windows are absent.","scope":"Descriptive reconstruction of the 2026-07-31 public article only; not a trade or forecasting specification.","status":"mixed","counterevidence_status":"mixed","counterevidence_refs":["L-03","L-14","L-16","PF01","PF02","PF03","PF15"]},{"framework_claim_id":"FC-BAL-02","statement":"An absolute-price barrier cannot independently falsify a benchmark-relative signal unless a conversion rule or same-unit signal criterion is disclosed.","quote_anchor_ids":["Q-BAL-02","Q-BAL-03"],"derivation_note":"The entry observation is expressed in benchmark-relative basis points, while the stated invalidation reference is an absolute price. Both can move in opposite directions during a market-wide move.","scope":"Evidence-quality and falsifier-consistency guardrail; it does not create a stop, target, or action rule.","status":"supported","counterevidence_status":"searched_none_found","counterevidence_refs":["L-14","final-methodology-review:F-05","PF13"]},{"framework_claim_id":"FC-BAL-03","statement":"When the source reports no material signal change, its disclosed default posture is to keep observing and avoid a directional upgrade.","quote_anchor_ids":["Q-BAL-05","Q-BAL-06"],"derivation_note":"The conclusion and continued-tracking paragraph both map uncertainty or no change to observation rather than escalation.","scope":"Conservative research posture only; the undefined words material, effective, and confirmed prevent mechanical replay.","status":"supported","counterevidence_status":"searched_none_found","counterevidence_refs":["L-08","L-16","PF16"]},{"framework_claim_id":"FC-BAL-04","statement":"The article exposes an event-level review field set, but two source-stated removals and an open-name dashboard do not establish a calibrated exit process or performance edge.","quote_anchor_ids":["Q-BAL-01","Q-BAL-07"],"derivation_note":"The source reports inclusion/removal dates, reference prices, elapsed-day labels, returns, and stated reasons. The image contains only open names, and no independent fills, denominator, benchmark, probability, or calibration protocol exists.","scope":"Method-card documentation and future hypothesis design only; no Decision, Hypothesis, or Event Memory write is authorized by this bundle.","status":"mixed","counterevidence_status":"mixed","counterevidence_refs":["L-20","L-22","L-23","L-28","PF18","PF19","NF02","NF03"],"evidence_source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"]}],
@@ -689,6 +690,173 @@
       }
     },
     {"method_card_id":"KMC-BALDER-20260731-FINAL","author":"Balder","author_handle":"@balder714059","market_scope":["observed US-listed equity roster in this issue only; broader market scope unknown"],"time_horizon":["lookback_10_days_as_stated_unit_unknown","forward_horizon_unknown"],"source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"lifecycle":{"public_claim":{"evidence_status":"partial","summary":"The source presents a public tracking ledger driven by an undisclosed benchmark-relative signal; it does not establish real positions or trades.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":["Q-BAL-01","Q-BAL-02"],"framework_claim_ids":[],"inference_label":"direct_assertion","provenance_mode":"source_summary","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["HOLDINGS/OPEN image wording conflicts with tracking/observation prose, and no account evidence is available."]},"falsifiable_thesis":{"evidence_status":"partial","summary":"A benchmark-relative signal is said to strengthen, persist through confirmation states, or weaken; the source's absolute-price invalidation is not a same-unit falsifier.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":[],"framework_claim_ids":["FC-BAL-01","FC-BAL-02"],"inference_label":"framework_inference","provenance_mode":"framework_inference","claim_type":"assumption","supporting_eids":[],"contradicting_eids":[],"unknowns":["benchmark, formula, threshold, state count, transition window, and forward horizon are undisclosed"],"falsifier":"Fail the reconstructed method if a frozen point-in-time replay cannot reproduce the disclosed state changes; do not use the absolute-price barrier as a substitute."},"universe_selection":{"evidence_status":"partial","summary":"The article exposes one observed roster, not a reproducible universe-selection rule.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":[],"framework_claim_ids":[],"inference_label":"direct_assertion","provenance_mode":"source_summary","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["full universe, liquidity floor, market-cap floor, sector rules, scan frequency, blacklist/whitelist, and IONQ mapping are unknown"]},"entry":{"evidence_status":"partial","summary":"The source states that IONQ was newly included for cautious tracking at a disclosed reference price; this is not verified trade entry, fill, side, size, or executable origin.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":["Q-BAL-02","Q-BAL-05"],"framework_claim_ids":[],"inference_label":"direct_assertion","provenance_mode":"source_summary","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["initial threshold, first-strengthening definition, benchmark, point-in-time data cutoff, publication/delivery origin, and trade semantics"]},"add_reduce":{"evidence_status":"unknown","summary":"not_found_publicly","source_document_ids":[],"quote_anchor_ids":[],"framework_claim_ids":[],"inference_label":"not_found_publicly","provenance_mode":"unverified","claim_type":"assumption","supporting_eids":[],"contradicting_eids":[],"unknowns":["No public add/reduce, tranche, rebalance, or scale rule is disclosed in this article; absence from one article does not prove nonexistence."]},"stop_invalidation":{"evidence_status":"partial","summary":"The source says a qualifying break below 36 would move the next reference support to 31.8 and place the relative-strength signal under falsification review; it does not disclose a hard stop or order.","source_document_ids":["DOC-BALDER-2026-07-31"],"quote_anchor_ids":["Q-BAL-03"],"framework_claim_ids":[],"inference_label":"direct_assertion","provenance_mode":"source_summary","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["effective-break definition, path, timeout, level derivation, conversion to relative signal, and resulting action are unknown"],"falsifier":"Treat the stated invalidation as non-reproducible until an observable same-unit signal criterion or conversion rule is disclosed."},"take_profit":{"evidence_status":"unknown","summary":"not_found_publicly","source_document_ids":[],"quote_anchor_ids":[],"framework_claim_ids":[],"inference_label":"not_found_publicly","provenance_mode":"unverified","claim_type":"assumption","supporting_eids":[],"contradicting_eids":[],"unknowns":["No public take-profit or time-stop rule is disclosed; an open winner does not prove that no such rule exists."]},"exit":{"evidence_status":"partial","summary":"The source states that CRCL and ARM were removed from tracking after the reported excess-return signal weakened; removal is not verified execution or a reproducible general exit rule.","source_document_ids":["DOC-BALDER-2026-07-31"],"quote_anchor_ids":["Q-BAL-01","Q-BAL-07"],"framework_claim_ids":[],"inference_label":"direct_assertion","provenance_mode":"source_summary","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["weakening threshold, data cutoff, exit origin, costs, slippage, fill, and denominator are unknown"]},"sizing_risk":{"evidence_status":"unknown","summary":"not_found_publicly","source_document_ids":[],"quote_anchor_ids":[],"framework_claim_ids":[],"inference_label":"not_found_publicly","provenance_mode":"unverified","claim_type":"assumption","supporting_eids":[],"contradicting_eids":[],"unknowns":["No public position size, risk unit, leverage, concentration cap, correlation control, drawdown limit, or account context is disclosed."]},"post_trade_calibration":{"evidence_status":"partial","summary":"The source publishes an internally consistent open-name dashboard and two retrospective tracking removals, but no independently audited calibration protocol or full denominator.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"quote_anchor_ids":[],"framework_claim_ids":[],"inference_label":"self_reported_performance","provenance_mode":"unverified","claim_type":"opinion","supporting_eids":[],"contradicting_eids":[],"unknowns":["fills, benchmark-relative outcomes, all historical exits, probabilities, win rate, expected value, drawdown, parameter updates, and OOS protocol are unknown"]}},"promotion_gaps":[{"reason":"The dashboard and retrospective returns are author self-report. Internal arithmetic consistency cannot raise reliability without an independent point-in-time outcome ledger and complete denominator.","source_document_ids":["DOC-BALDER-2026-07-31","DOC-BALDER-IMG-08"],"inference_label":"self_reported_performance","provenance_mode":"unverified","claim_type":"opinion","can_raise_reliability":false}],"subscriber_gaps":[{"reason":"The supplied email capture is complete for this artifact, but the canonical public page DOM and any paid method details were not verified and cannot be inferred.","source_document_ids":["DOC-BALDER-2026-07-31"]}],"portable_parts":["Describe the public method as a signal-state and tracking-state handoff, not as a verified trade system.","Keep a conservative no-change/no-upgrade default when fresh evidence is absent.","Use same-unit or explicitly converted falsifiers before calling a signal invalidated.","Retain event-level review fields only as documentation or future hypothesis design, never as proof of calibration."],"do_not_port":["The dated values 87bp, tier 0, 36, 31.8, 37.9, or 38 as reusable thresholds, stops, targets, or score inputs.","Tracking inclusion/removal or disclosed reference prices as verified entry, exit, fill, position, or account evidence.","Absolute dashboard returns as alpha, PnL, win rate, edge, or reliability promotion.","Hidden universe, sizing, add/reduce, take-profit, time-stop, scan-frequency, or subscriber rules.","Source-specific NVDA/storage/HBM/DRAM and SpaceX/TSLA taxonomy or analogy as a universe, causal, or investability rule.","A new Balder score, action level, module, KOL vote, watch-trigger action, alert, cron, email, or order path."],"unknowns":["The Substack @balder714059 identity was not re-linked to the existing X @Balder13946731 card; the two cards must remain distinct.","The canonical public article DOM, benchmark, formula, thresholds, full universe, time horizon, scan cadence, publication origin, execution semantics, and independent outcomes remain unknown.","MRVL and NFLX are NEW in the semantic image but continued/no-change in prose; their state remains mixed and must not be used as an oracle.","The source contains no canonical EvidenceItem IDs; all stage EID arrays remain explicitly empty and no Memory write is authorized."],"decision_boundary":{"allowed_effects":["tighten","refresh_source","request_manual_review"],"forbidden_effects":["raise_action_level","raise_position_cap","raise_reliability","revive_l0","order_execution"],"position_multiplier":0,"self_reported_performance_can_raise_reliability":false,"no_order_execution":true}}
+    ,{
+      "method_card_id": "KMC-BALDER-EARNINGS-RADAR-20260821",
+      "author": "Balder",
+      "author_handle": "balder-ai.com",
+      "market_scope": ["US equities", "US equity options", "earnings events"],
+      "time_horizon": ["pre-earnings snapshot", "next-session realized reaction", "rolling eight-event comparison"],
+      "source_document_ids": ["KOL-SRC-BALDER-EARNINGS-RADAR"],
+      "lifecycle": {
+        "public_claim": {
+          "evidence_status": "supported",
+          "summary": "The public methodology compares option-implied move with a session-aligned typical historical earnings move, applies RICH at 1.25x or above and CHEAP at 0.95x or below, and presents a badge-style score.",
+          "source_document_ids": ["KOL-SRC-BALDER-EARNINGS-RADAR"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["The public badge does not disclose a complete audited execution or calibration contract."]
+        },
+        "falsifiable_thesis": {
+          "evidence_status": "supported",
+          "summary": "A point-in-time ATM straddle premium divided by spot can be compared with the same issuer's session-aligned historical median without treating the ratio as a direction forecast.",
+          "source_document_ids": ["KOL-SRC-BALDER-EARNINGS-RADAR"],
+          "framework_claim_ids": [],
+          "inference_label": "direct_assertion",
+          "provenance_mode": "source_summary",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["Forward adjustment, quote-quality filters, and full historical sample construction are not completely disclosed."],
+          "falsifier": "A frozen replay fails to reproduce the disclosed implied-versus-typical label from the stated ATM straddle, session alignment, and 1.25x/0.95x thresholds."
+        },
+        "universe_selection": {
+          "evidence_status": "unknown",
+          "summary": "not_found_publicly",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["A complete liquidity, borrow-cost, market-cap, sector, and event-calendar universe rule was not established from the public methodology page."]
+        },
+        "entry": {
+          "evidence_status": "unknown",
+          "summary": "not_found_publicly",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["RICH/CHEAP and badge labels are not verified stock or option entry instructions."]
+        },
+        "add_reduce": {
+          "evidence_status": "unknown",
+          "summary": "not_found_publicly",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No reproducible public add, reduce, roll, or delta-hedge ladder was established."]
+        },
+        "stop_invalidation": {
+          "evidence_status": "unknown",
+          "summary": "not_found_publicly",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No public same-unit stop, timeout, or option-loss invalidation rule was established."]
+        },
+        "take_profit": {
+          "evidence_status": "unknown",
+          "summary": "not_found_publicly",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No reproducible public take-profit schedule was established."]
+        },
+        "exit": {
+          "evidence_status": "unknown",
+          "summary": "not_found_publicly",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No complete public stock or option exit state machine was established."]
+        },
+        "sizing_risk": {
+          "evidence_status": "unknown",
+          "summary": "not_found_publicly",
+          "source_document_ids": [],
+          "framework_claim_ids": [],
+          "inference_label": "not_found_publicly",
+          "provenance_mode": "unverified",
+          "claim_type": "assumption",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["No public position cap, tail-loss budget, CVaR, margin, or defined-risk sizing rule was established."]
+        },
+        "post_trade_calibration": {
+          "evidence_status": "partial",
+          "summary": "The public page self-reports 71 percent accuracy on n=24; this is an unaudited opinion with no independently verified denominator, frozen forecast ledger, costs, or full outcome protocol.",
+          "source_document_ids": ["KOL-SRC-BALDER-EARNINGS-RADAR"],
+          "framework_claim_ids": [],
+          "inference_label": "self_reported_performance",
+          "provenance_mode": "unverified",
+          "claim_type": "opinion",
+          "supporting_eids": [],
+          "contradicting_eids": [],
+          "unknowns": ["The 24-event sample, forecast timestamps, misses, label mapping, costs, and independent audit are unavailable."]
+        }
+      },
+      "promotion_gaps": [
+        {
+          "source_document_ids": ["KOL-SRC-BALDER-EARNINGS-RADAR"],
+          "reason": "The self-reported 71 percent accuracy on n=24 is opinion plus unverified performance and cannot raise reliability.",
+          "inference_label": "self_reported_performance",
+          "provenance_mode": "unverified",
+          "claim_type": "opinion",
+          "can_raise_reliability": false
+        }
+      ],
+      "subscriber_gaps": [],
+      "portable_parts": [
+        "ATM call mid plus ATM put mid divided by spot as the raw implied-move premium.",
+        "BMO versus AMC session alignment for issuer-specific historical absolute reactions.",
+        "RICH at implied-versus-typical ratio of at least 1.25 and CHEAP at 0.95 or below as methodology labels only.",
+        "Badge fields as a documentation schema that remains zero-weight until independently reproducible."
+      ],
+      "do_not_port": [
+        "Black-box tau-adjusted core or system lean.",
+        "Undisclosed flow z score or relative-strength phase (rs_phase).",
+        "Raw put/call volume, open-interest change, beat streak, or badge score as directional evidence.",
+        "The self-reported 71 percent n=24 result as reliability, action-level, or position-cap promotion.",
+        "A new Compiler module, action ladder, position-sizing formula, alert, order, or automatic prediction-registration path."
+      ],
+      "unknowns": [
+        "The system-lean mapping, tau adjustment, flow z formula, rs_phase formula, model training cutoff, and threshold calibration remain undisclosed.",
+        "The public page does not establish buyer/seller initiated open-close option flow, so signed-flow directional weight remains zero.",
+        "The full 24-event denominator and independently auditable outcomes remain unavailable."
+      ],
+      "decision_boundary": {
+        "allowed_effects": ["tighten", "refresh_source", "request_manual_review"],
+        "forbidden_effects": ["raise_action_level", "raise_position_cap", "raise_reliability", "revive_l0", "order_execution"],
+        "position_multiplier": 0.0,
+        "self_reported_performance_can_raise_reliability": false,
+        "no_order_execution": true
+      }
+    }
   ],
   "no_order_execution": true
 }

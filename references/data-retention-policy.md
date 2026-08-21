@@ -11,7 +11,7 @@ System A (paper-trading execution) accumulates a timestamped artifact on nearly 
 | Dir | Rule | Reason |
 |---|---|---|
 | `journal/*.jsonl`, `config/`, `scripts/`, `docs/`, `dashboard/`, `signals/`, root `*.md`, `.git` | Never touched (not in the allowlist at all) | The real ledger and the code |
-| `reports/*.md` (`daily_decision_*`, `paper_trade_review_*`, narrative recaps) | Kept forever | maintainer-designated high-value review conclusions |
+| `reports/*.md` (`daily_decision_*`, `paper_trade_review_*`, narrative recaps) | Kept forever | the user-designated high-value review conclusions |
 | `reports/*.json` | 30 days, then archived | Machine intermediate |
 | `decision_packets/` | 30 days, then archived | Pre-market snapshots; already summarized in daily journal/learning packets |
 | `state/` | Only timestamped `*_20*.json*` files, 14 days, then archived. Non-timestamped files (`universe_candidates.jsonl`, `risk_regime.json`) are never touched | `state/` is the single largest directory and almost pure snapshot; the untimestamped files are live pointers, not history |
@@ -37,7 +37,7 @@ Every file-level rule additionally requires the filename to carry a `_20YY`-shap
 
 1. Always run `--dry-run --json` first and read the `totals` block before ever running `--apply`.
 2. Check `archive/manifest.jsonl` after every `--apply` run — `sha256` and `tar_path` must both be present and the tar must be openable.
-3. `--apply` is a main-session / maintainer decision, not something automation runs unattended today. The weekly self-optimization loop only ever calls `--dry-run --json` (see `references/adaptive-self-optimization.md`); if the reported pending set is unusually large (see threshold below), that becomes a prompt for the maintainer or the main session to review and decide whether to run `--apply`.
+3. `--apply` is a main-session / the user decision, not something automation runs unattended today. The weekly self-optimization loop only ever calls `--dry-run --json` (see `references/adaptive-self-optimization.md`); if the reported pending set is unusually large (see threshold below), that becomes a prompt for the user or the main session to review and decide whether to run `--apply`.
 4. Threshold for flagging in the weekly digest: pending set `> 5000` files or `> 200MB`. Below that, routine growth; above it, worth a look before it compounds.
 
 ## Self-test

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """dispersion_crowding.py — 杠杆拥挤 / 离散度回归雷达（CBOE 免费源）。
 
-把 示例实盘复盘框架 operationalize：判断市场是否已堆出"所有人加杠杆、押在彼此
+把 用户 的实盘框架 operationalize：判断市场是否已堆出"所有人加杠杆、押在彼此
 独立的单票上"的脆弱结构，以及相关性是否正在回归 1（=多杀多强平进行中）。
 
 两个核心指标（CBOE 官方、免费、无 key，与 options_gamma.py 同一套 endpoint）：
@@ -234,7 +234,7 @@ def _aux_template() -> dict[str, Any]:
     """辅助情绪指标无稳定免费源时的手填入口（不脑补、留空即缺口）。"""
     return {
         "call_put_ratio": None,
-        "note": "call/put ratio 与其它情绪指标为 该框架中的辅助项；如有读数手填，否则视为缺口",
+        "note": "call/put ratio 与其它情绪指标为 用户 框架中的辅助项；如有读数手填，否则视为缺口",
     }
 
 

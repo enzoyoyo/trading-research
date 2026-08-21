@@ -13,7 +13,7 @@ try:
 except ImportError:
     classify = None
 
-AKSHARE_PYTHON = os.environ.get("AKSHARE_PYTHON") or "/opt/homebrew/bin/python3"
+AKSHARE_PYTHON = os.environ.get("AKSHARE_PYTHON") or sys.executable
 
 def _no_proxy_env() -> dict:
     e = os.environ.copy()

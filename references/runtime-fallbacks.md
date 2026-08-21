@@ -137,7 +137,7 @@ When a fallback chain touches more than one external source (LongBridge, CBOE, o
 
 1. Sources that never rate-limit/ban for normal single-symbol research queries go first.
 2. Rate-limited or key-required sources go after, and only when the free-tier source above them is unavailable or has a confirmed coverage gap.
-3. If the maintainer or the task explicitly names a specific local/offline source, use it as specified — do not silently fall back to a network source instead, even if the network source would answer faster. Report the explicit-source failure instead of substituting silently.
+3. If the user or the task explicitly names a specific local/offline source, use it as specified — do not silently fall back to a network source instead, even if the network source would answer faster. Report the explicit-source failure instead of substituting silently.
 
 This is an ordering principle only; it does not change which sources are wired into any bridge script, and it does not touch `references/a-stock-data-source-layer.md`'s existing tencent/eastmoney/juchao/AkShare chain or `scripts/a_stock_data_bridge.py`.
 

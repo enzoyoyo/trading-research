@@ -1,6 +1,6 @@
 # WeChat article → A-share inference workflow
 
-Use this when the user gives a WeChat/公众号 article and asks “说的是哪些 A 股票 / 图片要完全理解 / 深度分析”.
+Use this when 用户 gives a WeChat/公众号 article and asks “说的是哪些 A 股票 / 图片要完全理解 / 深度分析”.
 
 ## Goal
 Turn a narrative article plus embedded images into a bounded A-share inference: explicit evidence, inferred tickers, confidence, and watch/decision limits. This is research only; no order execution.

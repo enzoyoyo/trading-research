@@ -28,7 +28,7 @@ from data_freshness_guard import (  # noqa: E402
     validate_as_of_alignment,
 )
 
-AKSHARE_PYTHON = os.environ.get("AKSHARE_PYTHON") or "/opt/homebrew/bin/python3"
+AKSHARE_PYTHON = os.environ.get("AKSHARE_PYTHON") or sys.executable
 EMOTION_PHASES = ("ice", "start", "ferment", "climax", "divergence", "retreat")
 FLOW_STATES = ("first_inflow", "continuous_inflow", "recovery_inflow", "outflow", "mixed", "unknown")
 

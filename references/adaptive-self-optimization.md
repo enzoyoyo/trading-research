@@ -88,7 +88,7 @@
    - `skill_view(name='trading-research')`
    - `skill_view` 新增/修改 reference
    - `python3 scripts/validate_skill.py`
-   - `python ~/.hermes/skills/devops/skill-quality-gate/scripts/audit_skills.py --root ${HOME}/.hermes/skills/trading-research --format markdown`
+   - `python "${HOME}/.hermes/skills/devops/skill-quality-gate/scripts/audit_skills.py" --root "${HOME}/.hermes/skills/trading-research" --format markdown`
    - 若验证/compile 生成 `__pycache__/` 或 `*.pyc`，验证后清理并复查 skill tree；这属于维护清洁，不是语义升级。
 
 7. **Decision**
@@ -103,12 +103,12 @@
 
 ## Weekly Loop · Weekly Learning Digest（loop C：人话学习摘要）
 
-每日循环吐的全是机器 JSON，没人天天读。每周一次（由 `self_optimization_check.py` 在周一或 digest 超过 7 天时自动触发，不新增 cron）把台账 + 校准 + 决策记忆复盘 + 暂存候选聚合成一份 维护者能直接读的中文摘要——这周 skill 学到了什么、是不是在自欺、还有什么要人工拍板。
+每日循环吐的全是机器 JSON，没人天天读。每周一次（由 `self_optimization_check.py` 在周一或 digest 超过 7 天时自动触发，不新增 cron）把台账 + 校准 + 决策记忆复盘 + 暂存候选聚合成一份 用户 能直接读的中文摘要——这周 skill 学到了什么、是不是在自欺、还有什么要人工拍板。
 
 - 运行 `python3 scripts/learning_digest.py --out ~/.hermes/work/trading-research-autoevolve/digests/weekly-<date>.md`（只读、不下单、不改 skill）。
 - 摘要内容：一句话结论（校准是否诚实）→ 战绩（胜率/近端加权胜率/平均收益）→ 最常踩的坑（失败标签翻成人话）→ 拖后腿的票 → 待你拍板（loop A 的护栏候选 / compiler 漏洞 / 待人工映射数）→ 系统健康（台账 `query --health` 的静默失败信号）。
-- 摘要里的所有候选都只是暂存，必须经维护者确认 + 过 materiality 与 before/after eval 门才会真正进 skill。
-- 同一次 digest 时机顺带跑 `python3 scripts/data_retention.py --dry-run --json`（只读统计，不落地任何文件改动）；待清理量超过 5000 个文件或 200MB 时在 digest 里提示，`--apply` 留给维护者 或主会话确认后再执行，本循环自身不调用 `--apply`。
+- 摘要里的所有候选都只是暂存，必须经 用户 确认 + 过 materiality 与 before/after eval 门才会真正进 skill。
+- 同一次 digest 时机顺带跑 `python3 scripts/data_retention.py --dry-run --json`（只读统计，不落地任何文件改动）；待清理量超过 5000 个文件或 200MB 时在 digest 里提示，`--apply` 留给 用户 或主会话确认后再执行，本循环自身不调用 `--apply`。
 
 ## 输出格式
 

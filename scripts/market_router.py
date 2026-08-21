@@ -23,7 +23,7 @@ KNOWN: dict[str, dict[str, Any]] = {
     "英伟达": {"market": "US", "symbol": "NVDA", "company_name": "NVIDIA", "confidence": "medium", "reason": "known_us_name_hint"},
 }
 A_SUFFIX_MAP = {"SH": "SH", "SS": "SH", "SSE": "SH", "SZ": "SZ", "SZSE": "SZ", "BJ": "BJ", "BSE": "BJ"}
-AKSHARE_PYTHON = os.environ.get("AKSHARE_PYTHON") or "/opt/homebrew/bin/python3"
+AKSHARE_PYTHON = os.environ.get("AKSHARE_PYTHON") or sys.executable
 
 
 def infer_a_exchange(symbol: str) -> str:

@@ -22,7 +22,7 @@
 适用于单纯行情/持仓/盈亏/交易日/单指标当前值这类无需研究管线的问题。不铺垫，不展开质量门八件套。
 
 ```markdown
-你好，{{ONE_LINE_FACT}}。
+the user，{{ONE_LINE_FACT}}。
 
 数据时间：{{DATA_TIMESTAMP}}；来源：{{DATA_SOURCE}}
 ```
@@ -30,7 +30,7 @@
 取数失败或数据陈旧时改用：
 
 ```markdown
-你好，{{SYMBOL}} 数据缺口：{{DATA_GAP_REASON}}（{{DATA_SOURCE}} {{FAILURE_MODE}}）。
+用户，{{SYMBOL}} 数据缺口：{{DATA_GAP_REASON}}（{{DATA_SOURCE}} {{FAILURE_MODE}}）。
 ```
 
 ## Tier 1 速判格式
@@ -38,7 +38,7 @@
 适用于单标的能不能买/卖/加仓/止盈止损这类简单问题，用户未要求深度报告。跳过完整证据账本，但保留 Decision Compiler 裁决、falsifier 和最小质量门。
 
 ```markdown
-你好，{{SYMBOL}} {{ACTION_LEVEL}} {{ACTION_LABEL}}：{{ONE_SENTENCE_REASON}}。
+the user，{{SYMBOL}} {{ACTION_LEVEL}} {{ACTION_LABEL}}：{{ONE_SENTENCE_REASON}}。
 
 依据：[{{E1}}] {{EVIDENCE_1}}；[{{E2}}] {{EVIDENCE_2}}；[{{E3}}] {{EVIDENCE_3}}
 
@@ -52,7 +52,7 @@ falsifier：{{FALSIFIER}}
 ## Tier 2 · 默认主回复模板
 
 ```markdown
-你好，已完成。核心结论：
+用户，已完成。核心结论：
 
 {{SYMBOL}}：{{ACTION_LEVEL}} {{ACTION_LABEL}}；{{NEW_MONEY_ACTION}}；若已持有，{{HOLDING_ACTION}}。
 

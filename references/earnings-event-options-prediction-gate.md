@@ -211,3 +211,44 @@ implied_move_premium_pct = (ATM_call_mid + ATM_put_mid) / spot_or_forward
 - Cawley & Talbot, *On Over-fitting in Model Selection and Subsequent Selection Bias in Performance Evaluation*, JMLR 11(70):2079–2107: https://www.jmlr.org/papers/v11/cawley10a.html
 
 这些来源支持“哪些机制值得检验”和“哪些回测会泄漏”，不证明任一具体面板已有样本外 edge。任何作者自报命中率、截图或订阅引流都只能进入 provenance / watch 层，不能提高 reliability、动作等级或 position cap。
+
+## 11. 可复现计算口径（v2.59）
+
+### 11.1 公开期权定位快照
+
+`scripts/options_positioning_snapshot.py` 只读取 CBOE delayed JSON，HTTP timeout 固定为 20 秒，失败后只重试 1 次；两次均失败即输出 `cboe_fetch_failed` DataGap。它不生成 system lean、方向标签或动作等级。
+
+- `put_call_volume_ratio = sum(put volume) / sum(call volume)`；call volume 为 0 时结果为 `null`。
+- `atm_iv` 使用最近未到期 expiry、离 spot 最近且 call/put 同时存在的 strike，计算 `mean(call IV, put IV)`。
+- `iv_skew_pp = (nearest -0.25 delta put IV - nearest +0.25 delta call IV) * 100`，单位为 percentage points；任一 delta/IV 缺失即 `null`。
+- `oi_total` 与 `volume_total` 聚合完整未到期期权链。每日快照写入 `~/.cache/hermes/trading-research/earnings-radar/positioning/{SYMBOL}/{YYYY-MM-DD}.json`。
+- `oi_delta = current_oi_total - most_recent_prior_valid_daily_oi_total`。没有更早的有效本地快照时必须为 `null` 并写 `oi_history_insufficient`；它不是当日 signed opening flow。
+- 免费 CBOE 链没有 participant type × buy/sell × open/close，故 `signed_flow_direction_weight=0.0`，并永久保留 `signed_flow_unavailable_no_open_close_fields`。P/C 与 ΔOI 都不得转写为方向 lean。
+
+### 11.2 历史财报反应
+
+`scripts/earnings_move_history.py` 只接受可追溯的 SEC EDGAR 8-K `filed_at` 事件候选，并用 `scripts/longbridge_query.py candle` 的日线对齐交易日。8-K filed_at 只是 release proxy，未核验公司 IR 精确时间前不得作为 point-in-time 预测日历。
+
+- AMC 同时披露 `close(T) -> open(T+1)` 与 `close(T) -> close(T+1)`；主 `abs_move` 为后者。
+- BMO 同时披露 `close(T-1) -> open(T)` 与 `close(T-1) -> close(T)`；主 `abs_move` 为后者。
+- intraday、无显式时区、缺交易日 K 线或有效样本少于 4 时 fail closed，`hist_median=null`。
+- 结果缓存为 `~/.cache/hermes/trading-research/earnings-radar/moves/{SYMBOL}.json`，供隐含分布脚本只读复用。
+
+### 11.3 隐含幅度与相对标签
+
+`scripts/earnings_implied_distribution.py` 固定使用：
+
+```text
+implied_move_premium_pct = (ATM_call_mid + ATM_put_mid) / spot
+implied_vs_typical_ratio = implied_move_premium_pct / hist_median
+```
+
+bid 或 ask 缺失、ask < bid、ATM 双边不齐或 spot 无效时，隐含幅度及其全部派生字段一起为 `null`。显式 `--expiry` 应是财报后首到期；未提供财报日期与 expiry 时，脚本只能选择最近可用 expiry，并强制披露 `earnings_release_date_unavailable_expiry_not_verified`。
+
+`implied_vs_typical_ratio >= 1.25` 标 `RICH`，`<= 0.95` 标 `CHEAP`，中间标 `FAIR`；阈值来源记为 `method_source=balder_public_docs`。这些标签只描述期权定价相对该标的历史财报反应，不预测方向。若未来增加 butterfly 密度或积分概率，必须写 `risk_neutral=true`；字段只能命名为 `risk_neutral_p_up`，不得写成物理 `P(up)`。
+
+### 11.4 Consensus 冻结与 Compiler 接线
+
+US `scripts/fundamental_snapshot.py` 可读取 LongBridge `consensus` / `forecast-eps` 并把标准化 EPS 共识冻结到 `~/.cache/hermes/trading-research/earnings-radar/consensus/{SYMBOL}/`。`beat_rate_last_8` 只允许从本地先于结果冻结的共识与之后实际值形成 8 组时间有序配对；不足 8 组即 `null`，禁止用当前页面事后回填历史。
+
+以上产物只可作为 `modeled_scenario`、`quant_robustness`、`participant_flow` 的只读输入，统一 `position_multiplier=0.0`、`cannot_raise_upstream=true`。它们不得新建 Compiler module，不得提高 action level / position cap / reliability，不得复活 L0；财报窗口仍由既有 `event_proximity` / `execution_window` 与 `earnings_blackout` 裁决。

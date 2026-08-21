@@ -7,7 +7,7 @@ Prevent single-stock alpha analysis from overriding account-level risk/survival.
 ## Trigger
 
 Use when any of these appear:
-- the user asks to analyze LongBridge/长桥/券商 holdings, positions, or portfolio.
+- 用户 asks to analyze LongBridge/长桥/券商 holdings, positions, or portfolio.
 - the user asks whether to buy/add/catch a falling knife while already holding related positions.
 - Portfolio has negative cash, margin, financing/leverage, risk level, margin-call fields, or high same-theme concentration.
 - Candidate ticker or existing holdings are high-beta themes: AI, semiconductor, aerospace/space, small-cap growth, optical module, options-driven names.
