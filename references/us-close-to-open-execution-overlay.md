@@ -1,5 +1,7 @@
 # US Close-to-Open Execution Overlay · 美股收盘买开盘卖执行层
 
+> 主落点声明：编译进 `execution_window`；本层只降维和收紧。
+
 ## 目的
 
 把“判断要不要买 / 要不要卖”与“猜日内什么时候买 / 什么时候卖”拆开：

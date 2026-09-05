@@ -8,13 +8,15 @@
 
 ## 1. 同宇宙随机对照零假设
 
-任何因子/信号的 IC（Information Coefficient）类证据，必须与「同一宇宙、同一日期截面内随机置换」（cross-sectional shuffle within rows，不是把某个有限值原位钉住）产生的 null 因子对比。只对零基准检验（裸 IC>0.02、t>2）不构成 alpha 证据——共享横截面 beta（市值/市场）会让裸 IC 稳定通过随机对照之外的任何单变量门槛。
+任何因子/信号的 IC（Information Coefficient）类证据，都必须与同一宇宙的注册 null 对比。执行器同时实现逐日独立 `cross_section_shuffle` 与保留标的内自相关的 `circular_rotation`；默认值是否切换由 `factor-research-engine.md` §5.2 的真实对比门决定，不能仅因新增实现就切换。只对零基准检验（裸 IC>0.02、t>2）不构成 alpha 证据——共享横截面 beta（市值/市场）会让裸 IC 稳定通过随机对照之外的任何单变量门槛。
 
 产出字段：
 
 ```yaml
 factor_validation:
-  random_ic_mean: 0.0        # 同宇宙随机置换因子的平均 IC，作为零基准
+  null_kind: cross_section_shuffle
+  random_ic_mean: 0.0        # 同宇宙注册 null 的平均 IC，作为零基准
+  random_ic_std: 0.0         # 试验级 mean IC 分布标准差
   alpha_t: 0.0                # 真实因子 IC 相对随机对照分布的 t 值，不是相对 0 的 t 值
 ```
 

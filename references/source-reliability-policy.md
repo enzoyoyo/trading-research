@@ -15,8 +15,8 @@
 - 监管/交易所/基金正式定期报告中的持仓披露按原始文档定级，可作滞后事实；必须标报告期、发布日期、任职/控制关系，不能当实时资金流。
 - 发布主体官网上的本人访谈、手记或演讲可作“此人公开表达过该观点”的 B 级锚点；不能单独验证行业、公司或收益判断为真。
 - 媒体转述、标题、二手摘编最高 C；能回抓官方原文后，按原始来源重新定级。
-- 方法论蒸馏属于 `framework_inference`，不是 direct quote；必须走 `references/source-grounded-research-provenance.md`。
-- KOL 方法卡只证明“公开来源表达过/可蒸馏出该方法”；它不验证 edge。自报收益、命中率、账户曲线固定为 `self_reported_performance + unverified + opinion`，永不提高 reliability ceiling。
+- 方法论方法研究属于 `framework_inference`，不是 direct quote；必须走 `references/source-grounded-research-provenance.md`。
+- KOL 方法卡只证明“公开来源表达过/可方法研究出该方法”；它不验证 edge。自报收益、命中率、账户曲线固定为 `self_reported_performance + unverified + opinion`，永不提高 reliability ceiling。
 - 直接引文必须有本地捕获、内容 SHA-256 和行定位；拼接、改写、加省略号后不得继续标 verbatim。
 - 来源许可未知时默认 `redistribution_allowed=unknown`；只做内部短引或摘要+原始链接，不复制长篇正文。
 

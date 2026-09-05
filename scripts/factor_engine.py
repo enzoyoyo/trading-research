@@ -46,6 +46,12 @@ NEUTRALIZE_ALIASES = {
     "ols_residual_size_sector": "size_sector",
 }
 DEFAULT_RUN_DIR = Path.home() / ".cache" / "hermes" / "trading-research" / "factor-runs"
+NULL_KINDS = ("cross_section_shuffle", "circular_rotation")
+# A live comparison needs a deployable cross-section (>=30 symbols). The local
+# cache currently cannot clear that gate, so the default remains the incumbent
+# until compare-nulls produces at least one strict four-state downgrade.
+DEFAULT_NULL_KIND = "cross_section_shuffle"
+MIN_CIRCULAR_SERIES = 4
 
 
 def envelope(schema: str, **fields: Any) -> dict[str, Any]:
@@ -218,27 +224,122 @@ def _prepared_sections(observations: list[dict[str, Any]], min_cross_section: in
     return sections, excluded, len(grouped)
 
 
-def _null_summary(sections: list[tuple[str, list[float], list[float], list[str]]], trials: int, seed: int) -> tuple[list[float], float | None, float | None, float | None]:
+def _filter_null_sections(
+    sections: list[tuple[str, list[float], list[float], list[str]]],
+    excluded_symbols: set[str],
+) -> list[tuple[str, list[float], list[float], list[str]]]:
+    filtered: list[tuple[str, list[float], list[float], list[str]]] = []
+    for trade_date, factor_ranks, return_ranks, symbols in sections:
+        indexes = [index for index, symbol in enumerate(symbols) if symbol not in excluded_symbols]
+        filtered.append((
+            trade_date,
+            ranks([factor_ranks[index] for index in indexes]),
+            ranks([return_ranks[index] for index in indexes]),
+            [symbols[index] for index in indexes],
+        ))
+    return filtered
+
+
+def _circular_offsets(length: int) -> range:
+    """Exclude k=0, one-step near-zero and k=T-1 near-T rotations."""
+    return range(2, length - 1)
+
+
+def _null_summary(
+    sections: list[tuple[str, list[float], list[float], list[str]]],
+    trials: int,
+    seed: int,
+    *,
+    null_kind: str,
+    excluded_symbols: set[str] | None = None,
+) -> dict[str, Any]:
+    if null_kind not in NULL_KINDS:
+        raise ValueError(f"unsupported null kind: {null_kind}")
     real = [pearson(factor_ranks, return_ranks) for _, factor_ranks, return_ranks, _ in sections]
     real_values = [value for value in real if value is not None]
+    null_sections = _filter_null_sections(sections, excluded_symbols or set())
     rng = random.Random(seed)
     trial_means: list[float] = []
-    for _ in range(trials):
-        trial_ics: list[float] = []
-        for _, factor_ranks, return_ranks, _symbols in sections:
-            shuffled = list(factor_ranks)
-            rng.shuffle(shuffled)
-            value = pearson(shuffled, return_ranks)
-            if value is not None:
-                trial_ics.append(value)
-        if trial_ics:
-            trial_means.append(statistics.fmean(trial_ics))
+    offset_symbols: list[str] = []
+    offset_bounds: dict[str, list[int]] = {}
+    offsets_by_trial: list[list[int]] = []
+
+    if null_kind == "cross_section_shuffle":
+        for _ in range(trials):
+            trial_ics: list[float] = []
+            for _, factor_ranks, return_ranks, _symbols in null_sections:
+                shuffled = list(factor_ranks)
+                rng.shuffle(shuffled)
+                value = pearson(shuffled, return_ranks)
+                if value is not None:
+                    trial_ics.append(value)
+            if trial_ics:
+                trial_means.append(statistics.fmean(trial_ics))
+    else:
+        series: dict[str, list[tuple[int, float]]] = {}
+        for section_index, (_trade_date, factor_ranks, _return_ranks, symbols) in enumerate(null_sections):
+            for symbol, factor_rank in zip(symbols, factor_ranks):
+                series.setdefault(symbol, []).append((section_index, factor_rank))
+        offset_symbols = sorted(series)
+        offset_bounds = {
+            symbol: [2, len(series[symbol]) - 2]
+            for symbol in offset_symbols
+        }
+        positions = {
+            (section_index, symbol): position
+            for symbol, values in series.items()
+            for position, (section_index, _factor_rank) in enumerate(values)
+        }
+        values_by_symbol = {
+            symbol: [factor_rank for _section_index, factor_rank in values]
+            for symbol, values in series.items()
+        }
+        for _ in range(trials):
+            offsets = {
+                symbol: rng.choice(list(_circular_offsets(len(values_by_symbol[symbol]))))
+                for symbol in offset_symbols
+            }
+            offsets_by_trial.append([offsets[symbol] for symbol in offset_symbols])
+            trial_ics = []
+            for section_index, (_trade_date, _factor_ranks, return_ranks, symbols) in enumerate(null_sections):
+                rotated_values = []
+                aligned_returns = []
+                for symbol, return_rank in zip(symbols, return_ranks):
+                    values = values_by_symbol[symbol]
+                    position = positions[(section_index, symbol)]
+                    rotated_values.append(values[(position - offsets[symbol]) % len(values)])
+                    aligned_returns.append(return_rank)
+                value = pearson(ranks(rotated_values), ranks(aligned_returns))
+                if value is not None:
+                    trial_ics.append(value)
+            if trial_ics:
+                trial_means.append(statistics.fmean(trial_ics))
+
     random_mean = mean_or_none(trial_means)
     mean_real = mean_or_none(real_values)
     spread = statistics.stdev(trial_means) if len(trial_means) > 1 else None
     alpha_t = ((mean_real - random_mean) / spread
                if mean_real is not None and random_mean is not None and spread not in (None, 0) else None)
-    return real_values, random_mean, alpha_t, spread
+    return {
+        "real_values": real_values,
+        "random_ic_mean": random_mean,
+        "random_ic_std": spread,
+        "alpha_t": alpha_t,
+        "null_audit": {
+            "null_kind": null_kind,
+            "seed": seed,
+            "trials": trials,
+            "offset_policy": (
+                "not_applicable"
+                if null_kind == "cross_section_shuffle"
+                else "per_symbol_independent_k;2<=k<=T-2;exclude_0_1_and_T-1"
+            ),
+            "offset_symbols": offset_symbols,
+            "offset_bounds": offset_bounds,
+            "offsets_by_trial": offsets_by_trial,
+            "excluded_symbols": sorted(excluded_symbols or set()),
+        },
+    }
 
 
 def _autocorrelation(observations: list[dict[str, Any]], min_cross_section: int) -> float | None:
@@ -258,33 +359,76 @@ def _autocorrelation(observations: list[dict[str, Any]], min_cross_section: int)
     return mean_or_none(correlations)
 
 
-def _stats_for_sections(sections: list[tuple[str, list[float], list[float], list[str]]], trials: int, seed: int) -> dict[str, Any]:
-    real_ics, random_mean, alpha_t, _spread = _null_summary(sections, trials, seed)
+def _stats_for_sections(
+    sections: list[tuple[str, list[float], list[float], list[str]]],
+    trials: int,
+    seed: int,
+    *,
+    null_kind: str,
+    excluded_symbols: set[str],
+) -> dict[str, Any]:
+    summary = _null_summary(
+        sections, trials, seed, null_kind=null_kind, excluded_symbols=excluded_symbols
+    )
+    real_ics = summary["real_values"]
+    random_mean = summary["random_ic_mean"]
+    alpha_t = summary["alpha_t"]
     mean_ic = mean_or_none(real_ics)
     ic_std = statistics.stdev(real_ics) if len(real_ics) > 1 else None
     t_stat = (mean_ic / (ic_std / math.sqrt(len(real_ics)))) if mean_ic is not None and ic_std not in (None, 0) else None
     p_value = math.erfc(abs(t_stat) / math.sqrt(2)) if t_stat is not None else None
     return {"mean_ic": mean_ic, "ic_std": ic_std, "icir": mean_ic / ic_std if mean_ic is not None and ic_std not in (None, 0) else None,
-            "t_stat": t_stat, "p_value": p_value, "random_ic_mean": random_mean, "alpha_t": alpha_t,
+            "t_stat": t_stat, "p_value": p_value, "random_ic_mean": random_mean,
+            "random_ic_std": summary["random_ic_std"], "alpha_t": alpha_t,
             "positive_ic_share": sum(value > 0 for value in real_ics) / len(real_ics) if real_ics else None,
-            "section_count": len(real_ics)}
+            "section_count": len(real_ics), "null_audit": summary["null_audit"]}
+
+
+def _null_exclusions_for_sections(
+    sections: list[tuple[str, list[float], list[float], list[str]]],
+    explicit_exclusions: set[str],
+    null_kind: str,
+) -> tuple[set[str], set[str]]:
+    if null_kind != "circular_rotation":
+        return set(explicit_exclusions), set()
+    counts: dict[str, int] = {}
+    for _trade_date, _factor_ranks, _return_ranks, symbols in sections:
+        for symbol in symbols:
+            if symbol not in explicit_exclusions:
+                counts[symbol] = counts.get(symbol, 0) + 1
+    short = {symbol for symbol, count in counts.items() if count < MIN_CIRCULAR_SERIES}
+    return set(explicit_exclusions) | short, short
+
+
+def _null_cross_section_valid(
+    sections: list[tuple[str, list[float], list[float], list[str]]],
+    excluded_symbols: set[str],
+    min_cross_section: int,
+) -> bool:
+    return all(
+        sum(symbol not in excluded_symbols for symbol in symbols) >= min_cross_section
+        for _trade_date, _factor_ranks, _return_ranks, symbols in sections
+    )
 
 
 def evaluate_observations(
     observations: list[dict[str, Any]], *, null_trials: int = 100, seed: int = 42,
     min_cross_section: int = 30, min_dates: int = 40, train_frac: float = 0.7,
-    section_stride: int = 1,
+    section_stride: int = 1, null_kind: str = DEFAULT_NULL_KIND,
 ) -> dict[str, Any]:
-    if null_trials < 2 or min_cross_section < 2 or min_dates < 1 or section_stride < 1 or not 0 < train_frac < 1:
+    if (null_trials < 2 or min_cross_section < 2 or min_dates < 1 or section_stride < 1
+            or not 0 < train_frac < 1 or null_kind not in NULL_KINDS):
         raise ValueError("invalid evaluation parameters")
     raw_sections, excluded, total = _prepared_sections(observations, min_cross_section)
     sections = raw_sections[::section_stride]
     exclusion_share = excluded / total if total else 1.0
     if exclusion_share > 0.30 or len(sections) < min_dates:
-        null_stats: dict[str, Any] = {key: None for key in ("mean_ic", "ic_std", "icir", "t_stat", "p_value", "random_ic_mean", "alpha_t", "positive_ic_share", "rank_autocorr_1", "coverage", "monthly_ic")}
+        null_stats: dict[str, Any] = {key: None for key in ("mean_ic", "ic_std", "icir", "t_stat", "p_value", "random_ic_mean", "random_ic_std", "alpha_t", "positive_ic_share", "rank_autocorr_1", "coverage", "monthly_ic")}
         null_stats.update({"section_count": len(sections), "effective_sections": len(sections),
                            "raw_section_count": len(raw_sections), "section_stride": section_stride,
                            "excluded_dates": excluded, "total_dates": total,
+                           "null_kind": null_kind, "null_seed": seed, "null_trials": null_trials,
+                           "null_excluded_symbols": [], "null_audit": None,
                            "train": {"mean_ic": None, "alpha_t": None}, "test": {"mean_ic": None, "alpha_t": None}})
         gaps: list[dict[str, Any]] = []
         if len(sections) < min_dates:
@@ -297,9 +441,70 @@ def evaluate_observations(
                          "excluded_dates": excluded, "total_dates": total})
         return {"status": "insufficient_data", **null_stats, "data_gaps": gaps}
     split = max(1, min(len(sections) - 1, int(len(sections) * train_frac)))
-    overall = _stats_for_sections(sections, null_trials, seed)
-    train = _stats_for_sections(sections[:split], null_trials, seed + 1)
-    test = _stats_for_sections(sections[split:], null_trials, seed + 2)
+    explicit_exclusions = {
+        str(row.get("symbol"))
+        for row in observations
+        if row.get("null_eligible") is False and row.get("symbol") is not None
+    }
+    subsets = {"overall": sections, "train": sections[:split], "test": sections[split:]}
+    exclusions: dict[str, set[str]] = {}
+    short_by_subset: dict[str, set[str]] = {}
+    invalid_subsets: list[str] = []
+    for name, subset in subsets.items():
+        excluded_for_subset, short = _null_exclusions_for_sections(
+            subset, explicit_exclusions, null_kind
+        )
+        exclusions[name] = excluded_for_subset
+        short_by_subset[name] = short
+        if not _null_cross_section_valid(subset, excluded_for_subset, min_cross_section):
+            invalid_subsets.append(name)
+    if invalid_subsets:
+        null_stats = {key: None for key in ("mean_ic", "ic_std", "icir", "t_stat", "p_value", "random_ic_mean", "random_ic_std", "alpha_t", "positive_ic_share", "rank_autocorr_1", "coverage", "monthly_ic")}
+        null_stats.update({
+            "section_count": len(sections), "effective_sections": len(sections),
+            "raw_section_count": len(raw_sections), "section_stride": section_stride,
+            "excluded_dates": excluded, "total_dates": total,
+            "null_kind": null_kind, "null_seed": seed, "null_trials": null_trials,
+            "null_excluded_symbols": sorted(exclusions["overall"]), "null_audit": None,
+            "train": {"mean_ic": None, "alpha_t": None}, "test": {"mean_ic": None, "alpha_t": None},
+        })
+        gaps = [{
+            "reason_code": "insufficient_null_cross_section",
+            "gap": "null_cross_section_below_min_after_symbol_exclusions",
+            "invalid_subsets": invalid_subsets,
+            "excluded_symbols": sorted(set().union(*exclusions.values())),
+            "required": min_cross_section,
+        }]
+        if explicit_exclusions:
+            gaps.append({
+                "reason_code": "cross_source_panel_excluded_from_null",
+                "gap": "cross_source_symbol_history_excluded_from_random_control",
+                "symbols": sorted(explicit_exclusions),
+            })
+        if any(short_by_subset.values()):
+            gaps.append({
+                "reason_code": "circular_series_too_short",
+                "gap": "symbol_series_too_short_for_non_degenerate_rotation",
+                "symbols_by_subset": {key: sorted(value) for key, value in short_by_subset.items() if value},
+            })
+        return {"status": "insufficient_data", **null_stats, "data_gaps": gaps}
+
+    overall = _stats_for_sections(
+        sections, null_trials, seed, null_kind=null_kind, excluded_symbols=exclusions["overall"]
+    )
+    train = _stats_for_sections(
+        sections[:split], null_trials, seed + 1,
+        null_kind=null_kind, excluded_symbols=exclusions["train"],
+    )
+    test = _stats_for_sections(
+        sections[split:], null_trials, seed + 2,
+        null_kind=null_kind, excluded_symbols=exclusions["test"],
+    )
+    null_audit = {
+        "overall": overall.pop("null_audit"),
+        "train": train.pop("null_audit"),
+        "test": test.pop("null_audit"),
+    }
     monthly: dict[str, list[float]] = {}
     for trade_date, factor_ranks, return_ranks, _ in sections:
         value = pearson(factor_ranks, return_ranks)
@@ -307,15 +512,24 @@ def evaluate_observations(
             monthly.setdefault(trade_date[:7], []).append(value)
     valid_pairs = sum(len(section[1]) for section in sections)
     potential = sum(1 for row in observations if str(row.get("date")) in {section[0] for section in sections})
+    data_gaps: list[dict[str, Any]] = []
+    if explicit_exclusions:
+        data_gaps.append({
+            "reason_code": "cross_source_panel_excluded_from_null",
+            "gap": "cross_source_symbol_history_excluded_from_random_control",
+            "symbols": sorted(explicit_exclusions),
+        })
     return {"status": "ok", **overall, "effective_sections": len(sections),
             "raw_section_count": len(raw_sections), "section_stride": section_stride,
             "excluded_dates": excluded, "total_dates": total,
+            "null_kind": null_kind, "null_seed": seed, "null_trials": null_trials,
+            "null_excluded_symbols": sorted(exclusions["overall"]), "null_audit": null_audit,
             "train": {"mean_ic": train["mean_ic"], "alpha_t": train["alpha_t"]},
             "test": {"mean_ic": test["mean_ic"], "alpha_t": test["alpha_t"]},
             "rank_autocorr_1": _autocorrelation(observations, min_cross_section),
             "coverage": valid_pairs / potential if potential else None,
             "monthly_ic": {month: statistics.fmean(values) for month, values in monthly.items()},
-            "data_gaps": []}
+            "data_gaps": data_gaps}
 
 
 def _rolling_mean(values: list[Any], end: int, length: int) -> float | None:
@@ -390,8 +604,39 @@ def load_panels(market: str, symbols: list[str], root: Path | None = None) -> tu
             rows = payload.get("rows")
             if not isinstance(rows, list) or not rows:
                 raise ValueError("empty rows")
-            panels[symbol] = rows
+            declared_sources: set[str] = set()
+            top_sources = payload.get("panel_sources")
+            if isinstance(top_sources, list):
+                declared_sources.update(
+                    str(value).strip() for value in top_sources
+                    if isinstance(value, str) and value.strip()
+                )
+            top_source = payload.get("panel_source") or payload.get("source")
+            if isinstance(top_source, str) and top_source.strip():
+                declared_sources.add(top_source.strip())
+            for row in rows:
+                if isinstance(row, dict) and isinstance(row.get("panel_source"), str) and row["panel_source"].strip():
+                    declared_sources.add(row["panel_source"].strip())
+            cross_source = len(declared_sources) > 1
+            sole_source = next(iter(declared_sources)) if len(declared_sources) == 1 else None
             basis = payload.get("adjust_basis")
+            panel_adjust = payload.get("adjust")
+            panel_caveats = payload.get("pit_caveats")
+            panels[symbol] = [
+                {
+                    **row,
+                    "panel_source": row.get("panel_source") or sole_source,
+                    "panel_adjust": row.get("panel_adjust") or panel_adjust,
+                    "panel_adjust_basis": row.get("panel_adjust_basis") or basis,
+                    "panel_pit_caveats": (
+                        row.get("panel_pit_caveats")
+                        if isinstance(row.get("panel_pit_caveats"), list)
+                        else (panel_caveats if isinstance(panel_caveats, list) else [])
+                    ),
+                    "null_eligible": not cross_source,
+                }
+                for row in rows if isinstance(row, dict)
+            ]
             adjust_basis = str(basis) if basis else adjust_basis
         except (OSError, json.JSONDecodeError, ValueError) as exc:
             gaps.append({"symbol": symbol, "reason_code": "missing", "gap": f"panel_unavailable:{exc}"})
@@ -403,9 +648,22 @@ def run_engine(
     null_trials: int = 100, seed: int = 42, train_frac: float = 0.7,
     min_cross_section: int = 30, min_dates: int = 40, panel_root: Path | None = None,
     winsorize: str | None = None, standardize: str | None = None,
-    neutralize: str | None = None,
+    neutralize: str | None = None, null_kind: str = DEFAULT_NULL_KIND,
 ) -> dict[str, Any]:
     panels, gaps, adjust_basis = load_panels(market, symbols, panel_root)
+    cross_source_symbols = sorted(
+        symbol for symbol, rows in panels.items()
+        if any(row.get("null_eligible") is False for row in rows)
+    )
+    null_eligible_by_symbol = {
+        symbol: symbol not in set(cross_source_symbols) for symbol in panels
+    }
+    if cross_source_symbols:
+        gaps.append({
+            "reason_code": "cross_source_panel_excluded_from_null",
+            "gap": "cross_source_symbol_history_excluded_from_random_control",
+            "symbols": cross_source_symbols,
+        })
     factor_output: dict[str, Any] = {}
     overall_status = "ok"
     all_dates = sorted({str(row.get("date")) for rows in panels.values() for row in rows})
@@ -421,12 +679,14 @@ def run_engine(
                     observations.append({"date": trade_date, "symbol": symbol,
                                          "factor": values_by_symbol[symbol].get(trade_date),
                                          "size_proxy": sizes_by_symbol[symbol].get(trade_date),
-                                         "fwd_return": forwards.get(trade_date)})
+                                         "fwd_return": forwards.get(trade_date),
+                                         "null_eligible": null_eligible_by_symbol[symbol]})
             processed = preprocess_cross_sections(observations, winsorize=winsorize,
                                                   standardize=standardize, neutralize=neutralize)
             result = evaluate_observations(processed, null_trials=null_trials, seed=seed,
                                            min_cross_section=min_cross_section, min_dates=min_dates,
-                                           train_frac=train_frac, section_stride=horizon)
+                                           train_frac=train_frac, section_stride=horizon,
+                                           null_kind=null_kind)
             row_counts = {symbol: len(rows) for symbol, rows in panels.items()}
             ordered_counts = sorted(row_counts.values())
             available_rows_min = ordered_counts[0] if ordered_counts else 0
@@ -457,7 +717,7 @@ def run_engine(
                                       "direction_hypothesis": FACTOR_METHODS[factor_name]["direction_hypothesis"],
                                       "calculation_ref": FACTOR_METHODS[factor_name]["formula"]}
     run_material = json.dumps({"market": market, "symbols": symbols, "factors": factors,
-                               "horizons": horizons, "seed": seed}, sort_keys=True)
+                               "horizons": horizons, "seed": seed, "null_kind": null_kind}, sort_keys=True)
     hash8 = hashlib.sha256(run_material.encode()).hexdigest()[:8]
     run_id = f"fr_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{hash8}"
     return envelope("factor_engine_run.v1", run_id=run_id, status=overall_status, market=market,
@@ -466,9 +726,181 @@ def run_engine(
                            "excluded_symbols": len(gaps)},
                     n_factors_scanned=len(factors) * len(horizons),
                     multiple_testing_policy="fixed_alpha_t_threshold_3.5_disclosure_only_not_family_adjusted",
-                    seed=seed, null_trials=null_trials,
+                    seed=seed, null_trials=null_trials, null_kind=null_kind,
                     factors=factor_output, data_gaps=gaps,
                     pit_caveats=["qfq_rewrites_history", "survivorship_current_constituents"])
+
+
+def _factor_state(stats: dict[str, Any], direction: str) -> str | None:
+    import factor_verdict
+    return factor_verdict.classify(stats, direction)
+
+
+def compare_null_evaluations(
+    observations: list[dict[str, Any]], *, direction: str = "+", **kwargs: Any
+) -> dict[str, Any]:
+    """Run both nulls on one observation set and expose all three P1 gates."""
+    common = dict(kwargs)
+    common.pop("null_kind", None)
+    shuffle = evaluate_observations(
+        observations, null_kind="cross_section_shuffle", **common
+    )
+    circular = evaluate_observations(
+        observations, null_kind="circular_rotation", **common
+    )
+    return _null_comparison_entry(shuffle, circular, direction=direction)
+
+
+def _null_comparison_entry(
+    shuffle: dict[str, Any], circular: dict[str, Any], *, direction: str,
+) -> dict[str, Any]:
+    comparable = shuffle.get("status") == "ok" and circular.get("status") == "ok"
+    shuffle_std, circular_std = shuffle.get("random_ic_std"), circular.get("random_ic_std")
+    shuffle_alpha, circular_alpha = shuffle.get("alpha_t"), circular.get("alpha_t")
+    std_strictly_wider = bool(
+        comparable and finite(shuffle_std) and finite(circular_std)
+        and float(circular_std) > float(shuffle_std)
+    )
+    alpha_non_increase = bool(
+        comparable and finite(shuffle_alpha) and finite(circular_alpha)
+        and float(circular_alpha) <= float(shuffle_alpha) + 1e-12
+    )
+    old_state = _factor_state(shuffle, direction) if comparable else None
+    new_state = _factor_state(circular, direction) if comparable else None
+    return {
+        "comparable": comparable,
+        "cross_section_shuffle": {
+            "random_ic_mean": shuffle.get("random_ic_mean"),
+            "random_ic_std": shuffle_std,
+            "alpha_t": shuffle_alpha,
+            "state": old_state,
+            "status": shuffle.get("status"),
+        },
+        "circular_rotation": {
+            "random_ic_mean": circular.get("random_ic_mean"),
+            "random_ic_std": circular_std,
+            "alpha_t": circular_alpha,
+            "state": new_state,
+            "status": circular.get("status"),
+        },
+        "null_std_strictly_wider": std_strictly_wider,
+        "alpha_t_non_increase": alpha_non_increase,
+        "state_changed": comparable and old_state != new_state,
+        "downgraded_from_confirmed_alive": (
+            comparable and old_state == "confirmed_alive" and new_state != "confirmed_alive"
+        ),
+        "data_gaps": list(shuffle.get("data_gaps") or []) + list(circular.get("data_gaps") or []),
+    }
+
+
+def compare_engine_nulls(
+    market: str, symbols: list[str], factors: list[str], horizons: list[int], **kwargs: Any
+) -> dict[str, Any]:
+    """Compare both registered nulls and recommend a default only after all gates."""
+    common = dict(kwargs)
+    common.pop("null_kind", None)
+    shuffle = run_engine(
+        market, symbols, factors, horizons, null_kind="cross_section_shuffle", **common
+    )
+    circular = run_engine(
+        market, symbols, factors, horizons, null_kind="circular_rotation", **common
+    )
+    comparisons: list[dict[str, Any]] = []
+    state_changes: list[dict[str, Any]] = []
+    downgrades: list[dict[str, Any]] = []
+    alpha_decreases: list[float] = []
+    for factor_name in factors:
+        direction = str(FACTOR_METHODS[factor_name]["direction_hypothesis"])
+        for horizon in horizons:
+            left = shuffle["factors"][factor_name]["horizons"][str(horizon)]
+            right = circular["factors"][factor_name]["horizons"][str(horizon)]
+            item = {
+                "factor": factor_name,
+                "horizon": horizon,
+                **_null_comparison_entry(left, right, direction=direction),
+            }
+            comparisons.append(item)
+            if item["comparable"] and finite(item["cross_section_shuffle"]["alpha_t"]) and finite(item["circular_rotation"]["alpha_t"]):
+                alpha_decreases.append(
+                    float(item["cross_section_shuffle"]["alpha_t"])
+                    - float(item["circular_rotation"]["alpha_t"])
+                )
+            if item["state_changed"]:
+                change = {
+                    "factor": factor_name,
+                    "horizon": horizon,
+                    "before": item["cross_section_shuffle"]["state"],
+                    "after": item["circular_rotation"]["state"],
+                }
+                state_changes.append(change)
+                if item["downgraded_from_confirmed_alive"]:
+                    downgrades.append(change)
+    comparable = [item for item in comparisons if item["comparable"]]
+    invariants_pass = bool(comparable) and all(
+        item["null_std_strictly_wider"] and item["alpha_t_non_increase"]
+        for item in comparable
+    )
+    median_alpha_decrease = statistics.median(alpha_decreases) if alpha_decreases else None
+    falsifier_triggered = bool(
+        comparable and not state_changes and median_alpha_decrease is not None
+        and median_alpha_decrease < 0.3
+    )
+    supported = invariants_pass and bool(downgrades)
+    if not comparable:
+        status = "insufficient_data"
+    elif not invariants_pass:
+        status = "failed_invariants"
+    else:
+        status = "ok"
+    comparison_material = json.dumps({
+        "market": market, "symbols": symbols, "factors": factors, "horizons": horizons,
+        "seed": common.get("seed", 42), "null_trials": common.get("null_trials", 100),
+    }, sort_keys=True)
+    comparison_id = (
+        f"fnc_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_"
+        f"{hashlib.sha256(comparison_material.encode()).hexdigest()[:8]}"
+    )
+    comparison_gaps: list[dict[str, Any]] = []
+    required_cross_section = int(common.get("min_cross_section", 30))
+    if len(symbols) < required_cross_section:
+        comparison_gaps.append({
+            "reason_code": "insufficient_universe",
+            "gap": "cached_panel_universe_below_min_cross_section",
+            "available_symbols": len(symbols),
+            "required_symbols": required_cross_section,
+        })
+    if not comparable and not comparison_gaps:
+        comparison_gaps.append({
+            "reason_code": "no_comparable_factor_horizon",
+            "gap": "both_nulls_must_produce_judgeable_statistics",
+        })
+    return envelope(
+        "factor_null_comparison.v1", comparison_id=comparison_id, status=status,
+        market=market, symbols=symbols, factors=factors, horizons=horizons,
+        seed=common.get("seed", 42), null_trials=common.get("null_trials", 100),
+        compared_count=len(comparable), comparison_count=len(comparisons),
+        invariants={
+            "circular_random_ic_std_strictly_wider_for_every_comparable_pair": (
+                bool(comparable) and all(item["null_std_strictly_wider"] for item in comparable)
+            ),
+            "circular_alpha_t_never_increases": (
+                bool(comparable) and all(item["alpha_t_non_increase"] for item in comparable)
+            ),
+        },
+        comparisons=comparisons,
+        state_changes=state_changes,
+        downgrade_count=len(downgrades), downgrades=downgrades,
+        median_alpha_t_decrease=median_alpha_decrease,
+        real_comparison_success=bool(comparable),
+        hypothesis_result=(
+            "supported" if supported
+            else ("falsified" if falsifier_triggered else ("pending_evidence" if not comparable else "not_supported"))
+        ),
+        falsifier_triggered=falsifier_triggered,
+        default_null_before=DEFAULT_NULL_KIND,
+        default_null_recommendation=("circular_rotation" if supported else "cross_section_shuffle"),
+        data_gaps=comparison_gaps + list(shuffle.get("data_gaps") or []) + list(circular.get("data_gaps") or []),
+    )
 
 
 def _atomic_save(path: Path, payload: dict[str, Any]) -> None:
@@ -495,6 +927,11 @@ def self_test() -> None:
     result = evaluate_observations(observations, null_trials=60, seed=42,
                                    min_cross_section=5, min_dates=5)
     assert result["status"] == "ok" and result["mean_ic"] > 0.9 and result["alpha_t"] > 3.5
+    circular = evaluate_observations(
+        observations, null_trials=20, seed=42, min_cross_section=5,
+        min_dates=5, null_kind="circular_rotation",
+    )
+    assert circular["status"] == "ok" and circular["null_audit"]["overall"]["offsets_by_trial"]
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "result.json"
         _atomic_save(path, envelope("factor_engine_self_test.v1", ok=True))
@@ -524,6 +961,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--factors", default="all", help=FACTORS_HELP)
     run.add_argument("--horizons", default="1,5,10")
     run.add_argument("--null-trials", type=int, default=100)
+    run.add_argument(
+        "--null", choices=NULL_KINDS, default=DEFAULT_NULL_KIND,
+        help="random-control null; default stays cross_section_shuffle until a real >=30-symbol comparison records a strict downgrade",
+    )
+    run.add_argument("--compare-nulls", action="store_true", help="run both nulls and emit invariant/state-change comparison")
     run.add_argument("--seed", type=int, default=42)
     run.add_argument("--winsorize", choices=PREPROCESS_METHODS["winsorize"])
     run.add_argument("--standardize", choices=PREPROCESS_METHODS["standardize"])
@@ -547,7 +989,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "list-methods":
             result = envelope("factor_engine_methods.v1", factors=FACTOR_METHODS,
                               preprocess=PREPROCESS_METHODS,
-                              neutralize_aliases=NEUTRALIZE_ALIASES)
+                              neutralize_aliases=NEUTRALIZE_ALIASES,
+                              null_kinds=list(NULL_KINDS), default_null_kind=DEFAULT_NULL_KIND)
         else:
             factors = list(DEFAULT_FACTORS) if args.factors == "all" else [item for item in args.factors.split(",") if item]
             unknown = sorted(set(factors) - set(FACTOR_METHODS))
@@ -556,14 +999,28 @@ def main(argv: list[str] | None = None) -> int:
             horizons = [int(item) for item in args.horizons.split(",")]
             if any(value < 1 for value in horizons):
                 raise ValueError("horizons must be >=1")
-            result = run_engine(args.market, _symbols(args), factors, horizons,
-                                null_trials=args.null_trials, seed=args.seed,
-                                train_frac=args.train_frac, min_cross_section=args.min_cross_section,
-                                min_dates=args.min_dates, winsorize=args.winsorize,
-                                standardize=args.standardize, neutralize=args.neutralize)
+            run_kwargs = {
+                "null_trials": args.null_trials, "seed": args.seed,
+                "train_frac": args.train_frac, "min_cross_section": args.min_cross_section,
+                "min_dates": args.min_dates, "winsorize": args.winsorize,
+                "standardize": args.standardize, "neutralize": args.neutralize,
+            }
+            selected_symbols = _symbols(args)
+            if args.compare_nulls:
+                result = compare_engine_nulls(
+                    args.market, selected_symbols, factors, horizons, **run_kwargs
+                )
+            else:
+                result = run_engine(
+                    args.market, selected_symbols, factors, horizons,
+                    null_kind=args.null, **run_kwargs,
+                )
             if args.save:
                 root = Path(os.environ.get("FACTOR_RUN_DIR", str(DEFAULT_RUN_DIR))).expanduser()
-                path = root / f"{result['run_id']}.json"
+                artifact_id = result.get("run_id") or result.get("comparison_id")
+                if not artifact_id:
+                    raise ValueError("factor output missing artifact id")
+                path = root / f"{artifact_id}.json"
                 _atomic_save(path, result)
                 result["saved_path"] = str(path)
     except (OSError, ValueError, json.JSONDecodeError) as exc:

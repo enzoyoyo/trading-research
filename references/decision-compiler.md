@@ -40,7 +40,7 @@ module_signal:
    | 市场风险型 | `risk_regime`、`forced_liquidation`、`liquidity_squeeze`、`gamma`、`account`、`brokerage_portfolio_margin`、`portfolio_risk_budget`，以及未列入认知型集合的其他注册模块 | 强制 `holding_directive=EXIT` |
    | 认知型 | `data_quality`、`calculation_quality`、`ingestion_permission`、`conflict_ledger`、`research_readiness` | 不机械卖出；holding 仍取信号自身 L4/L5 推导的最大值，并输出 `epistemic_veto=true`、`manual_review_required=true` 交回人工复核 |
 3. **新仓最保守权限优先**：WATCH/TEST/BUILD/ADD 取最低权限；任一 BLOCK、REDUCE、EXIT 都禁止新 entry。
-4. **仓位乘数相乘**：`final_cap = base_cap × Π(position_multiplier)`，再应用红线 cap；中性值是 1.0，0.0 表示不允许新仓。若最终乘数为 0，则 entry permission 退回 WATCH/BLOCK，不得输出“L1 但零仓位”。
+4. **仓位乘数按 module 聚合**：每条信号先应用 Cap Registry 硬钳制；同一 module 内多个 overlay 再取最小 `position_multiplier`，跨 module 连乘：`final_cap = base_cap × Π_module(min(position_multiplier))`。被同 module 最小值替代的信号必须在 `cap_applied` 保留 `superseded_by_min=true` 审计项。中性值是 1.0，0.0 表示不允许新仓。若最终乘数为 0，则 entry permission 退回 WATCH/BLOCK，不得输出“L1 但零仓位”。
 5. **未裁决冲突默认 BLOCK/WATCH**：Conflict Ledger 存在 unresolved 项时，不得升到 TEST。
 6. **合同先于评分**：未知 module、缺 required module、重复 module、任意 strict signal（含 L0）缺 EID/时间或 stale/future 均 fail-closed。
 7. **数据缺口 cap 优先于评分**：关键行情/财报/Gamma/账户缺口触发对应最高动作限制。
@@ -68,16 +68,17 @@ module_signal:
 | `political_disclosure` vote 封顶 | 0.10 | 有界 vote 成分，calibration 自调，必带 `disclosure_lag_days` |
 | `x_frontline` / KOL 封顶 | 0.15 | 仅线索，不独立提仓位 |
 | `kol_method_cards` handoff | `position_multiplier=0.0` | 只允许 tighten / refresh source / manual review；不得抬级、加仓、复活 L0 或下单 |
-| `participant_flow` confidence 加成 | +0.1 | 唯一可加分项；不进 action level / position cap / sizing |
+| ETF/基金 `participant_flow` confidence 加成 | +0.1 | 唯一可加分项；仅当 `净流入 / 基金规模` 落在自身近 N 期高分位且披露 N/阈值时生效；名义流量或 AUM 缺失/过期则不加分、退回中性并记 `data_gaps: flow_not_scale_normalized`；不进 action level / position cap / sizing |
 | `modeled_scenario` / `analog_prior` | `position_multiplier=0.0` | 只进 hypothesis/scenario_prior/watch_priority |
 | `overnight_ensemble_ranker` 自身 | `position_multiplier=0.0` | 只排序/提 watch priority |
 | 因子结论缺 `random_ic_mean`/`alpha_t` 或缺 `n_factors_scanned`（v2.33） | `readiness_level` 封顶 `research_hypothesis`，`position_multiplier=0.0` | 未过同宇宙随机对照零假设或未声明扫描规模 |
 | `train_only`/`noise`/`reversed_strict`（v2.33 四态分类） | `position_multiplier=0.0` | 只进研究假设账本，不得作为加分信号 |
-| `hk_deep_value_no_catalyst`（港股深度价值无收敛契机，v2.45） | `entry_permission` 封顶 `WATCH`（观察池，不得右侧买入）；`position_multiplier` 不单独设值，仅继承既有规则连乘（本条为门槛型收紧，不发明数值） | 右侧买入纪律的编译形态；来源 `hk-offshore-market-playbook.md` 第 1、6 节 |
+| `hk_deep_value_no_catalyst`（港股深度价值无收敛契机，v2.45） | `entry_permission` 封顶 `WATCH`（观察池，不得右侧买入）；`position_multiplier` 不单独设值，仅继承既有按 module 聚合规则（本条为门槛型收紧，不发明数值） | 右侧买入纪律的编译形态；来源 `hk-offshore-market-playbook.md` 第 1、6 节 |
 | `hk_momentum_drawdown_review`（港股动量持仓自高点回撤 10-20% 区间，v2.45） | 强制触发止盈/止损复核，复核前不得维持或提高原动作等级 | 只收紧复核纪律，不替代 `trading-laws.md` 永久回撤红线；来源 `hk-offshore-market-playbook.md` 第 5 节 |
+| `counter_consensus_thesis`（逆共识命题） | `position_multiplier<=0.3`；`falsifier` 或 `time_stop` 任一缺失时 `entry_permission` 封顶 `WATCH` | 编译进 `endogenous_structure`；把人性判断限制为有仓位上限、有证伪条件、有时间止损的有界输入 |
 | Tighten-only 不变量 | 所有 vX 新增门只收紧可交易集，永不放宽动作等级/仓位上限 | 全局 |
 
-本表在 `scripts/decision_compiler.py` 的 `MODULE_POSITION_MULTIPLIER_CAP` / `_hk_overlay_entry_doc_ref` 中运行时强制：模块乘数封顶硬钳制、零乘数模块伪造 TEST/BUILD/ADD 直接 fail-closed（而非静默钳制）、`required_modules` 不得由 payload 自我缩小（内置 baseline 按 `decision_context.intent` 推导，见脚本注释）。`hk_deep_value_no_catalyst` / `hk_momentum_drawdown_review`（第 76-77 行）在代码里按 `module_signal` 上的同名布尔字段生效，不绑定特定 `module` 名——与 `hk-offshore-market-playbook.md` 第 114 行「对应现有模块」的表述一致，由携带该发现的模块（`fundamentals`/`endogenous_structure` 等）在信号上直接携带该字段。
+本表在 `scripts/decision_compiler.py` 的 `MODULE_POSITION_MULTIPLIER_CAP` / `_hk_overlay_entry_doc_ref` / `apply_caps()` 中运行时强制：模块乘数封顶硬钳制、`counter_consensus_thesis` 缺 `falsifier/time_stop` 的 WATCH 门、零乘数模块伪造 TEST/BUILD/ADD 直接 fail-closed（而非静默钳制）、`required_modules` 不得由 payload 自我缩小（内置 baseline 按 `decision_context.intent` 推导，见脚本注释）。`hk_deep_value_no_catalyst` / `hk_momentum_drawdown_review`（第 76-77 行）在代码里按 `module_signal` 上的同名布尔字段生效，不绑定特定 `module` 名——与 `hk-offshore-market-playbook.md` 第 136 行「对应现有模块」的表述一致，由携带该发现的模块（`fundamentals`/`endogenous_structure` 等）在信号上直接携带该字段。
 
 ## Mira Quality Gate → Compiler 映射（v2.7）
 
@@ -132,7 +133,7 @@ MiroFish-style modeled scenario 比 prediction-market prior 更弱：它不是�
 | 输入状态 | module_signal | 默认动作上限 |
 |---|---|---|---|
 | 参与者图谱清晰、边际买卖双方稳定、动机变化可识别 | `participant_flow` | 无直接限制；其他模块按正常流程裁决 |
-| 参与者图谱清晰、且主导流方向与决策方向一致 | `participant_flow` | 可小幅提升 confidence（`confidence += 0.1`），不提高 action level |
+| 参与者图谱清晰、且主导流方向与决策方向一致；若输入为 ETF/基金流，须以 `净流入 / 基金规模` 表达并落在自身近 N 期高分位（披露 N/阈值） | `participant_flow` | 可小幅提升 confidence（`confidence += 0.1`），不提高 action level；ETF/基金仅有名义流量或 AUM 缺失/过期时不加分、退回中性并记 `data_gaps: flow_not_scale_normalized` |
 | 参与者图谱清晰、但主导流方向与决策方向相反 | `participant_flow` | 降 confidence（`confidence -= 0.2`）；逆主导流交易必须有明确动机变化催化剂 |
 | 参与者结构剧烈变化（如机构集体减持、short squeeze、lockup 到期）但方向未明 | `participant_flow` | 最高 L1 watch；等待结构稳定 |
 | 关键参与者数据不可得（持股结构/做空比例/资金流缺项） | `participant_flow` | 标注 `participant_gap`；降 confidence；不单纯因缺参与者数据直接否决 |
@@ -361,3 +362,55 @@ Decision Compiler:
 - 主要降级模块：risk_regime / gamma / data_gap / x_frontline / ...
 - 修复信号：...
 ```
+
+## 方法 → 落点 module 映射契约
+
+`method_router.py` 的方法名是研究路由镜头，不是 Compiler module。下表把
+16 个 `METHOD_LABELS` 钉到现有 `REGISTERED_MODULES`；第一项是主落点，后续项
+只在方法确实产出对应类型事实时作为次级落点。映射本身不生成正向
+`module_signal`，也不提高动作等级或仓位上限。
+
+<!-- method-module-map:start -->
+| 方法 key | 落点 module（主 → 次） | 边界 |
+|---|---|---|
+| `huayuan` | `fundamentals`, `filing` | 叙事先回到财报/公告事实 |
+| `serenity` | `fundamentals`, `endogenous_structure` | 供需瓶颈为基本面主落点，结构分化为次级 |
+| `youzi_emotion` | `participant_flow`, `endogenous_structure` | 情绪与边际资金优先，不把热度当事实 |
+| `wyckoff` | `market_data`, `endogenous_structure` | 量价事实与结构解释分列 |
+| `livermore` | `market_data`, `endogenous_structure` | 趋势/关键点不越过上游风控 |
+| `factor` | `quant_robustness` | 因子只经严格门参与排序/收紧 |
+| `poisson` | `event_proximity`, `research_readiness` | 事件时钟与等待纪律，不独立抬仓 |
+| `options_gamma` | `gamma`, `data_quality` | Gamma 结构与数据新鲜度分列 |
+| `supply_chain_xray` | `fundamentals`, `endogenous_structure` | 公司级供应链事实为主，横截面结构为次 |
+| `early_stage_quality` | `fundamentals`, `research_readiness` | 早期主题缺口只会降低可行动性 |
+| `endogenous_microstructure` | `endogenous_structure`, `participant_flow`, `dispersion_crowding` | 方法名不等于 module 名；按事实类型分流 |
+| `macro_policy_news_account` | `macro`, `filing`, `x_frontline`, `account` | 宏观为主；官方、线索、账户事实不得混账 |
+| `counter_consensus` | `endogenous_structure` | 使用 `counter_consensus_thesis` 子框架与 Cap 行 |
+| `expected_returns` | `fundamentals`, `research_readiness` | 预期来源可靠性不能替代事实验证 |
+| `bottleneck_scorecard` | `research_readiness`, `fundamentals` | 评分只排研究优先级，底层事实另入基本面 |
+| `a_share_short_term` | `participant_flow`, `endogenous_structure`, `market_data`, `a_share_raw_source` | A 股情绪/资金为主，制度与行情来源单列 |
+<!-- method-module-map:end -->
+
+Overlay 文件每个只能声明一个主落点；多模块输出保留为次级证据分流。下表是
+`validate_skill.py` 使用的显式 allowlist，避免用文件名或全文关键词猜测范围。
+`adjudication_fallback` 表示原文件未指定唯一主落点，按本轮任务 2 #1 的
+既有挂载清单落到 `endogenous_structure`；若文件文本与裁决清单都无法确定，
+必须写 `needs_review`，不得猜测别的 module。
+
+<!-- overlay-module-map:start -->
+| Overlay reference | 主落点 module | 判定依据 |
+|---|---|---|
+| `attention-rumor-triage.md` | `endogenous_structure` | `adjudication_fallback` |
+| `a-share-derivatives-ipo.md` | `endogenous_structure` | `file_explicit` |
+| `capex-cashflow-duration-rotation.md` | `endogenous_structure` | `adjudication_fallback` |
+| `cycle-position-three-clocks.md` | `endogenous_structure` | `adjudication_fallback` |
+| `earnings-call-interpretation.md` | `fundamentals` | `file_explicit` |
+| `etf-selection-rotation.md` | `endogenous_structure` | `adjudication_fallback` |
+| `hk-offshore-market-playbook.md` | `endogenous_structure` | `adjudication_fallback` |
+| `prosperity-davis-double-framework.md` | `fundamentals` | `file_explicit` |
+| `rates-fx-crypto-overlay.md` | `endogenous_structure` | `adjudication_fallback` |
+| `second-order-supply-shock-mapping.md` | `endogenous_structure` | `adjudication_fallback` |
+| `semis-index-divergence-overlay.md` | `endogenous_structure` | `file_explicit` |
+| `short-cycle-market-structure-overlay.md` | `execution_window` | `file_explicit` |
+| `us-close-to-open-execution-overlay.md` | `execution_window` | `file_explicit` |
+<!-- overlay-module-map:end -->

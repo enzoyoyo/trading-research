@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,8 @@ THRESHOLD = 3.5
 MIN_OOS_PERIODS = 3
 ENGINE_DIR = Path.home() / ".cache" / "hermes" / "trading-research" / "factor-runs"
 BACKTEST_DIR = Path.home() / ".cache" / "hermes" / "trading-research" / "factor-backtests"
+VERDICT_DIR = Path.home() / ".cache" / "hermes" / "trading-research" / "factor-verdicts"
+VERDICT_DIR_ENV = "FACTOR_VERDICT_DIR"
 FIXTURE = ROOT / "templates" / "factor-experiment-example.json"
 
 
@@ -35,6 +39,34 @@ def _load_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"JSON object required: {path}")
     return payload
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False)
+        os.replace(tmp_name, path)
+    except Exception:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
+def save_verdict(verdict: dict[str, Any], directory: Path | None = None) -> Path:
+    """Persist one judge output plus an atomic latest pointer for reconciliation."""
+    root = directory or Path(os.environ.get(VERDICT_DIR_ENV) or VERDICT_DIR).expanduser()
+    digest = hashlib.sha256(json.dumps(verdict, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:10]
+    stamp = str(verdict.get("generated_at_utc") or utc_now()).replace("-", "").replace(":", "")
+    artifact = root / f"{stamp}-{digest}.json"
+    verdict["verdict_path"] = str(artifact)
+    _atomic_write_json(artifact, verdict)
+    _atomic_write_json(root / "latest.json", verdict)
+    return artifact
 
 
 def load_run(value: str, *, kind: str) -> dict[str, Any]:
@@ -64,12 +96,16 @@ def classify(stats: dict[str, Any], direction_hypothesis: str) -> str | None:
     train_ic, test_ic = train.get("mean_ic"), test.get("mean_ic")
     if not all(finite(value) for value in (train_alpha, test_alpha, train_ic, test_ic)):
         return None
-    if float(train_alpha) >= THRESHOLD and float(test_alpha) >= THRESHOLD and float(train_ic) * float(test_ic) > 0:
+    sign = -1.0 if direction_hypothesis == "-" else 1.0
+    train_o = sign * float(train_alpha)
+    test_o = sign * float(test_alpha)
+    alpha_o = sign * float(stats["alpha_t"])
+    if train_o >= THRESHOLD and test_o >= THRESHOLD and float(train_ic) * float(test_ic) > 0:
         return "confirmed_alive"
-    if float(train_alpha) >= THRESHOLD and float(test_alpha) < THRESHOLD:
+    if train_o >= THRESHOLD and test_o < THRESHOLD:
         return "train_only"
     overall_ic = stats.get("mean_ic")
-    if (float(stats["alpha_t"]) <= -THRESHOLD and float(test_alpha) <= -THRESHOLD
+    if (alpha_o <= -THRESHOLD and test_o <= -THRESHOLD
             and finite(overall_ic) and opposite_direction(float(overall_ic), direction_hypothesis)
             and opposite_direction(float(test_ic), direction_hypothesis)):
         return "reversed_strict"
@@ -90,6 +126,10 @@ def _backtest_gate(backtest: dict[str, Any] | None) -> tuple[bool, list[str]]:
         gaps.append("missing_walk_forward")
     elif not finite(train.get("periods")) or not finite(test.get("periods")) or int(test["periods"]) < MIN_OOS_PERIODS:
         gaps.append("missing_walk_forward")
+    elif not finite(test.get("sharpe")):
+        gaps.append("missing_walk_forward")
+    elif float(test["sharpe"]) <= 0.0:
+        gaps.append("oos_net_sharpe_nonpositive")
     return not gaps, gaps
 
 
@@ -110,6 +150,7 @@ def build_verdict(
     factors = engine_run.get("factors")
     if engine_run.get("status") != "ok" or not isinstance(factors, dict) or not factors:
         return envelope("factor_verdict.v1", ok=False, status="not_judgeable", state=None,
+                        generated_at_utc=utc_now(),
                         decision_use="hypothesis_only", readiness_level="research_hypothesis",
                         data_gaps=["engine_run_not_ok"], suggested_module_signal=None)
     factor_name = factor or (str(backtest_run.get("factor")) if isinstance(backtest_run, dict) and backtest_run.get("factor") else next(iter(factors)))
@@ -165,9 +206,12 @@ def build_verdict(
     }
     statement = (f"factor={factor_name};market={market};universe={universe.get('basis', 'unknown')};"
                  f"horizon={horizon_id};run_id={run_id};state={state or 'not_judgeable'}")
+    reconciliation_key = f"{market}|{factor_name}|{horizon_id}"
     hypothesis_payload = {
         "statement": statement, "status": state or "open", "source_module": "quant_robustness",
         "tags": [factor_name, market], "evidence_ids": [run_id],
+        "falsifiers": [f"next rolling OOS {factor_name}/{horizon_id} alpha_t < {THRESHOLD}"],
+        "reconciliation_key": reconciliation_key, "record_type": "factor_verdict",
         "note": f"factor verdict {state or 'not_judgeable'}; survivorship ceiling enforced",
     }
     suggested = None
@@ -187,7 +231,9 @@ def build_verdict(
     gaps.extend(gate_gaps)
     return envelope(
         "factor_verdict.v1", ok=state is not None, status="judged" if state is not None else "not_judgeable",
-        factor=factor_name, horizon_id=horizon_id, state=state, threshold=THRESHOLD,
+        generated_at_utc=utc_now(), run_id=run_id, market=market,
+        factor=factor_name, horizon_id=horizon_id, reconciliation_key=reconciliation_key,
+        state=state, threshold=THRESHOLD,
         decision_use=decision_use, readiness_level=readiness,
         survivorship_ceiling={"decision_use_max": "ranking_support", "readiness_max": "working_view"},
         research_experiment=research_experiment, factor_validation=validation,
@@ -203,9 +249,13 @@ def register_hypothesis(verdict: dict[str, Any], update_id: str | None = None) -
     env = dict(os.environ)
     if update_id:
         command = [sys.executable, str(SCRIPTS / "hypothesis_registry.py"), "update", "--id", update_id,
-                   "--status", str(payload["status"]), "--note", str(payload["note"])]
+                   "--status", str(payload["status"]), "--note", str(payload["note"]),
+                   "--reconciliation-key", str(payload["reconciliation_key"]),
+                   "--record-type", str(payload["record_type"])]
         for tag in payload.get("tags") or []:
             command.extend(["--tag", str(tag)])
+        for falsifier in payload.get("falsifiers") or []:
+            command.extend(["--falsifier", str(falsifier)])
     else:
         fd, name = tempfile.mkstemp(prefix="factor-verdict-", suffix=".json")
         os.close(fd)
@@ -256,19 +306,29 @@ def self_test() -> None:
     validate_fixture()
     with tempfile.TemporaryDirectory() as tmp:
         registry = Path(tmp) / "hypotheses.json"
+        verdict_dir = Path(tmp) / "factor-verdicts"
         previous = os.environ.get("TRADING_RESEARCH_HYPOTHESES_PATH")
+        previous_verdict_dir = os.environ.get(VERDICT_DIR_ENV)
         os.environ["TRADING_RESEARCH_HYPOTHESES_PATH"] = str(registry)
+        os.environ[VERDICT_DIR_ENV] = str(verdict_dir)
         try:
             fixture = _load_json(FIXTURE)
             case = fixture["cases"][0]
             verdict = build_verdict(case["engine_run"], case["backtest_run"], factor=case["factor"], horizon=str(case["horizon"]))
             result = register_hypothesis(verdict)
             assert result["status"] == "created" and registry.exists()
+            verdict["registration"] = result
+            artifact = save_verdict(verdict)
+            assert artifact.exists() and (verdict_dir / "latest.json").exists(), artifact
         finally:
             if previous is None:
                 os.environ.pop("TRADING_RESEARCH_HYPOTHESES_PATH", None)
             else:
                 os.environ["TRADING_RESEARCH_HYPOTHESES_PATH"] = previous
+            if previous_verdict_dir is None:
+                os.environ.pop(VERDICT_DIR_ENV, None)
+            else:
+                os.environ[VERDICT_DIR_ENV] = previous_verdict_dir
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -298,6 +358,7 @@ def main(argv: list[str] | None = None) -> int:
         verdict = build_verdict(engine_run, backtest, factor=args.factor, horizon=args.horizon)
         if args.register or args.update_id:
             verdict["registration"] = register_hypothesis(verdict, args.update_id)
+        save_verdict(verdict)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError, subprocess.SubprocessError) as exc:
         print(json.dumps(envelope("factor_verdict_error.v1", ok=False, status="error",
                                   data_gaps=[{"reason_code": "error", "gap": str(exc)}]), ensure_ascii=False))

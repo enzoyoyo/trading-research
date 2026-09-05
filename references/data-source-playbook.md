@@ -16,7 +16,7 @@
 8. 多标的/跨市场研究 → 用 `scripts/intelligence_coverage.py` 编译每个 `target × dimension` 的 capability/coverage/DataGap；按 high→medium→low criticality round-robin 补抓，禁止把 unsupported/error 写成 0 或“无事件”。
 9. 跨 agent 环境通过 PATH 或环境变量解析：LongBridge 用 `LONGBRIDGE_BIN`，AkShare Python 用 `AKSHARE_PYTHON`，Hermes 用 `HERMES_BIN`；缺失时明确报错。
 
-## 1. 本机已验证数据源能力矩阵
+## 1. 数据源能力与运行时核验
 
 | 数据源 | 形态 | 覆盖 | 验证命令 | 备注 |
 |---|---|---|---|---|
@@ -29,7 +29,7 @@
 | **CBOE delayed**（`scripts/options_gamma.py`） | 内部脚本 | 美股期权/Gamma：Put Wall/Call Wall/Gamma Flip/GEX | `python3 scripts/options_gamma.py AVGO --json` | 免 key，约15分钟延迟；yfinance+BS 仅兜底 |
 | **Hermes Grok（xai-oauth）** | `hermes` CLI | 全网实时新闻/X 社媒/叙事热度/交叉验证 | `python3 scripts/live_intel_run.py <标的> --health` | 仅用已登录 Grok；不可用时切 web 搜索并标注 |
 | **WindClaw / Wind** | Hermes MCP + `scripts/windclaw_bridge.py` | A 股实时表现、个股/板块、Wind 金融语料、公告/研报/新闻搜索 | `hermes mcp test windclaw-web`; `hermes mcp test windclaw-quote`; `python3 scripts/windclaw_bridge.py health --json` | A 股备用与交叉验证源；session 只放 `.env`/runtime 文件，不写进报告 |
-| **IMA 个人交易法 KB** | OpenAPI（`ima-skill`） | 方法论原文（华源/Serenity/游资/威科夫/利弗莫尔/因子/杠铃） | KB `个人交易法`，75 条 | 方法论参考，非行情；本目录 `references/*` 已是其蒸馏版 |
+| **IMA 个人交易法 KB** | OpenAPI（`ima-skill`） | 方法论原文（华源/Serenity/游资/威科夫/利弗莫尔/因子/杠铃） | KB `个人交易法`，75 条 | 方法论参考，非行情；本目录 `references/*` 已是其方法研究版 |
 | **Web 搜索/抓取** | 各 Agent 已装 skill + `scripts/multi_source_search.py` | 突发新闻、公告、研报、IR、多索引候选 | `web_search`/`web_extract`；失败或覆盖不足时 `python3 scripts/multi_source_search.py '<query>' --profile news --allow-external-search --json` | 搜索结果只作发现；原文回抓后重定级 |
 
 > 不可用/未接入的源（如 IBKR 只读账户、Choice）：报告写「unavailable」，给一般仓位上限，不声称已抓取。WindClaw 只有健康检查通过且实际调用成功时才可写「已抓取」。
@@ -64,7 +64,7 @@ python3 scripts/a_stock_data_bridge.py fund-flow 000858.SZ --limit 20 --json
 
 ## 2b. AkShare 实测用法（A 股广覆盖兜底）
 
-**代理注意**：本机设了 `HTTP(S)_PROXY=http://127.0.0.1:8118`，eastmoney 行情/推送域名经代理常 `RemoteDisconnected`。取数时绕开代理并重试：
+**代理注意**：若行情域名经已配置代理返回 `RemoteDisconnected`，按网络策略检查直连可用性，避免无限重试：
 
 ```bash
 # 绕代理跑 akshare（eastmoney 为国内直连，无需代理）
@@ -92,6 +92,32 @@ PY
 | 南向资金汇总 | `stock_hsgt_fund_flow_summary_em()` |
 | 美股快照/日线 | `stock_us_spot_em()` / `stock_us_hist(symbol='105.TSLA', ...)` |
 | 美债收益率（宏观） | `bond_zh_us_rate(start_date)` |
+
+### `factor_panel` A/HK AkShare 族内日线备源链（2026-08-29）
+
+- A/HK 的 `--source auto` 保持东财端点优先，失败后尝试 AkShare 族内新浪端点
+  `akshare_sina`；`--source akshare` 仍只走东财，`--source akshare_sina` 只走新浪并拒绝
+  US。US 既有 AkShare → LongBridge 路径不变。
+- A 股新浪使用 `stock_zh_a_daily(..., adjust='qfq')`：`6`/`9` 开头映射 `sh`，
+  `0`/`3` 开头映射 `sz`；北交所 `4`/`8` 开头暂不支持，不发请求并记录
+  `sina_symbol_unsupported`。
+- 港股新浪使用 `stock_hk_daily(..., adjust='qfq')`，函数返回全历史，由取数子进程按请求窗口
+  过滤；该端点无换手率，`turnover_rate` 恒为 `None`。
+- 新浪 A 股 `turnover` 是 `volume / outstanding_share` 的小数占比（如 `0.0123` 表示
+  `1.23%`），东财换手率字段是百分数；两者保留各自原始口径，禁止跨端点直接比较或拼接。
+  东财与新浪分别使用 `qfq_snapshot_*`、`sina_qfq_snapshot_*` `adjust_basis`；同轮出现多个
+  basis 时只上报 `mixed_adjust_basis_risk`，不把它们视为可比口径。
+
+### `factor_panel` 东财健康门与 LongBridge 港股主源（2026-08-30）
+
+- 东财历史数据端点失败或限流时，不按标的无限重试；数据获取状态与行情值分开记录。
+- A/HK `factor_panel --source auto` 在真正需要东财前只发一条金丝雀；失败后将
+  `<panel-root>/em_health.json` 写为 down，并冷却 6 小时，冷却内不再发东财请求而直接走后续源。
+  `--source akshare` 是人工诊断旁路，不读写健康态；该门是止血，不把失败伪装成行情数据。
+- HK `auto` 链改为 LongBridge forward 日线优先 → 健康的东财 qfq → AkShare 新浪 qfq。LongBridge
+  返回的 candle `time` 为 UTC，带时间分量时必须加 8 小时后作为港股交易日；`turnover` 是成交额，
+  不是换手率，因此 `turnover_rate` 继续为 `None`。LongBridge 凭据仍仅由既有 `~/.longbridge/`
+  路径自管读取，代码不读取、回显或写入 token。
 
 ## 2c. AkShare ETF / A 股期权 / 可转债 实测用法（2026-07-19）
 
@@ -167,7 +193,7 @@ longbridge capital 600487.SH --flow --format json  # 资金流向
 longbridge market-temp CN --format json          # 市场温度（CN/HK/US）
 ```
 
-若 PATH 找不到 `longbridge`，设置 `LONGBRIDGE_BIN="${HOME}/.local/bin/longbridge"` 后再运行。
+若 PATH 找不到 `longbridge`，设置 `LONGBRIDGE_BIN` 后再运行。
 
 - 符号格式：`TSLA.US` / `700.HK` / `600519.SH` / `300846.SZ`。`--format json` 便于解析。
 - LongBridge 优先作为**实时行情/交易时段/盘前盘后/可用时期权链**源；A 股短线结构（涨停/连板/龙虎榜）仍以 AkShare 为主。

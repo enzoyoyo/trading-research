@@ -478,6 +478,7 @@ def main() -> int:
                     help="moves smaller than this (abs %%) record as neutral")
     ap.add_argument("--limit", type=int, default=200, help="max decisions to verify in one run")
     ap.add_argument("--dry-run", action="store_true", help="report what would be recorded without writing")
+    ap.add_argument("--predictions-only", action="store_true", help="Settle only frozen prediction contracts; leave legacy decision reviews to their existing review workflow")
     ap.add_argument("--now", help="override 'now' (ISO-8601); for testing only")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--self-test", action="store_true")
@@ -494,7 +495,9 @@ def main() -> int:
 
     conn = connect(db_path(args))
     try:
-        out = run(conn, now, quote_with_fallback, args.deadband_pct, args.limit, args.dry_run)
+        out = ({"ok": True, "status": "prediction_contracts_only", "dry_run": args.dry_run,
+                "no_order_execution": True} if args.predictions_only else
+               run(conn, now, quote_with_fallback, args.deadband_pct, args.limit, args.dry_run))
         out["prediction_ledger"] = settle_due_predictions(
             conn,
             now,

@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -81,11 +82,122 @@ DEFAULT_ROOTS = [
 EXCLUDE_SUBSTRINGS = ["node_modules", "vendor_imports", ".hermes/hermes-agent"]
 SUPPORTED_LEARNING_PACKET_SCHEMAS = {"paper_learning_packet.v1", "paper_learning_packet.v2"}
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+OVERLAY_MODULE_CONTRACTS = {
+    "attention-rumor-triage.md": ("endogenous_structure", "adjudication_fallback"),
+    "a-share-derivatives-ipo.md": ("endogenous_structure", "file_explicit"),
+    "capex-cashflow-duration-rotation.md": ("endogenous_structure", "adjudication_fallback"),
+    "cycle-position-three-clocks.md": ("endogenous_structure", "adjudication_fallback"),
+    "earnings-call-interpretation.md": ("fundamentals", "file_explicit"),
+    "etf-selection-rotation.md": ("endogenous_structure", "adjudication_fallback"),
+    "hk-offshore-market-playbook.md": ("endogenous_structure", "adjudication_fallback"),
+    "prosperity-davis-double-framework.md": ("fundamentals", "file_explicit"),
+    "rates-fx-crypto-overlay.md": ("endogenous_structure", "adjudication_fallback"),
+    "second-order-supply-shock-mapping.md": ("endogenous_structure", "adjudication_fallback"),
+    "semis-index-divergence-overlay.md": ("endogenous_structure", "file_explicit"),
+    "short-cycle-market-structure-overlay.md": ("execution_window", "file_explicit"),
+    "us-close-to-open-execution-overlay.md": ("execution_window", "file_explicit"),
+}
 
 
 def fail(msg: str) -> None:
     print(f"FAIL: {msg}")
     raise SystemExit(1)
+
+
+def _literal_assignment(source: str, name: str) -> Any:
+    tree = ast.parse(source)
+    for node in tree.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(target, ast.Name) and target.id == name for target in targets):
+                return ast.literal_eval(node.value)
+    raise ValueError(f"assignment not found: {name}")
+
+
+def _marked_section(text: str, start: str, end: str) -> str:
+    before, separator, remainder = text.partition(start)
+    if not separator:
+        return ""
+    section, separator, _after = remainder.partition(end)
+    return section if separator else ""
+
+
+def method_module_mapping_errors(
+    decision_text: str, method_router_source: str, compiler_source: str
+) -> list[str]:
+    errors: list[str] = []
+    section = _marked_section(
+        decision_text, "<!-- method-module-map:start -->", "<!-- method-module-map:end -->"
+    )
+    if not section:
+        return ["method-to-module mapping section missing"]
+    expected_methods = set(_literal_assignment(method_router_source, "METHOD_LABELS"))
+    registered_modules = set(_literal_assignment(compiler_source, "REGISTERED_MODULES"))
+    mappings: dict[str, list[str]] = {}
+    for line in section.splitlines():
+        match = re.match(r"^\|\s*`([a-z0-9_]+)`\s*\|\s*([^|]+)\|", line)
+        if not match:
+            continue
+        method = match.group(1)
+        if method in mappings:
+            errors.append(f"duplicate method mapping: {method}")
+            continue
+        mappings[method] = re.findall(r"`([a-z0-9_]+)`", match.group(2))
+    missing = sorted(expected_methods - set(mappings))
+    extra = sorted(set(mappings) - expected_methods)
+    if missing:
+        errors.append(f"method mapping missing: {','.join(missing)}")
+    if extra:
+        errors.append(f"method mapping unknown: {','.join(extra)}")
+    for method, modules in mappings.items():
+        if not modules:
+            errors.append(f"method mapping has no module: {method}")
+        unknown = sorted(set(modules) - registered_modules)
+        if unknown:
+            errors.append(f"method mapping uses unregistered module for {method}: {','.join(unknown)}")
+    return errors
+
+
+def overlay_module_contract_errors(decision_text: str, references_root: Path) -> list[str]:
+    errors: list[str] = []
+    section = _marked_section(
+        decision_text, "<!-- overlay-module-map:start -->", "<!-- overlay-module-map:end -->"
+    )
+    if not section:
+        return ["overlay module mapping section missing"]
+    mappings: dict[str, tuple[str, str]] = {}
+    for line in section.splitlines():
+        match = re.match(
+            r"^\|\s*`([^`]+\.md)`\s*\|\s*`([a-z_]+)`\s*\|\s*`([a-z_]+)`\s*\|", line
+        )
+        if not match:
+            continue
+        filename, module, basis = match.groups()
+        if filename in mappings:
+            errors.append(f"duplicate overlay mapping: {filename}")
+            continue
+        mappings[filename] = (module, basis)
+    missing = sorted(set(OVERLAY_MODULE_CONTRACTS) - set(mappings))
+    extra = sorted(set(mappings) - set(OVERLAY_MODULE_CONTRACTS))
+    if missing:
+        errors.append(f"overlay mapping missing: {','.join(missing)}")
+    if extra:
+        errors.append(f"overlay mapping unknown: {','.join(extra)}")
+    for filename, expected in OVERLAY_MODULE_CONTRACTS.items():
+        if mappings.get(filename) != expected:
+            errors.append(f"overlay mapping mismatch for {filename}: expected {expected}, got {mappings.get(filename)}")
+        path = references_root / filename
+        if not path.exists():
+            errors.append(f"overlay reference missing: {filename}")
+            continue
+        head = "\n".join(path.read_text(encoding="utf-8").splitlines()[:8])
+        declared = re.findall(r"编译进\s+`([a-z_]+)`", head)
+        if declared != [expected[0]]:
+            errors.append(
+                f"overlay {filename} must declare exactly one primary module in first 8 lines: "
+                f"expected {expected[0]}, got {declared}"
+            )
+    return errors
 
 
 def openstock_clean_room_errors(text: str) -> list[str]:
@@ -144,8 +256,39 @@ def multica_collaboration_contract_errors(text: str) -> list[str]:
     return errors
 
 
-def run_json(cmd: list[str]) -> Any:
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+def daily_journal_window_contract_errors(reference_text: str, runtime_text: str) -> list[str]:
+    """Keep the documented daily-journal window aligned with the CLI default."""
+    errors: list[str] = []
+    expected_command = "`python3 scripts/daily_journal.py --compose --days 10 --publish`"
+    if expected_command not in reference_text:
+        errors.append("daily journal reference must prescribe --days 10")
+
+    try:
+        tree = ast.parse(runtime_text)
+    except SyntaxError:
+        return errors + ["daily journal runtime parser could not be parsed"]
+
+    defaults: list[Any] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        func = node.func
+        if not isinstance(func, ast.Attribute) or func.attr != "add_argument":
+            continue
+        first = node.args[0]
+        if not isinstance(first, ast.Constant) or first.value != "--days":
+            continue
+        for keyword in node.keywords:
+            if keyword.arg == "default" and isinstance(keyword.value, ast.Constant):
+                defaults.append(keyword.value.value)
+
+    if defaults != [10]:
+        errors.append("daily journal runtime --days default must be 10")
+    return errors
+
+
+def run_json(cmd: list[str], *, env: dict[str, str] | None = None) -> Any:
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=env)
     if proc.returncode:
         fail(f"command failed: {' '.join(cmd)} :: {proc.stderr[-400:]}")
     try:
@@ -382,6 +525,13 @@ def offline_checks() -> None:
     if collaboration_errors:
         fail("; ".join(collaboration_errors))
 
+    journal_window_errors = daily_journal_window_contract_errors(
+        (ROOT / "references" / "adaptive-self-optimization.md").read_text(encoding="utf-8"),
+        (SCRIPTS / "daily_journal.py").read_text(encoding="utf-8"),
+    )
+    if journal_window_errors:
+        fail("; ".join(journal_window_errors))
+
     for pat in SECRET_PATTERNS:
         if pat.search(all_md):
             fail(f"secret-like pattern found in markdown: {pat.pattern}")
@@ -518,6 +668,18 @@ def offline_checks() -> None:
         if phrase not in method_router:
             fail(f"method_router missing {phrase}")
 
+    decision_text = (ROOT / "references" / "decision-compiler.md").read_text(encoding="utf-8")
+    compiler_source = (SCRIPTS / "decision_compiler.py").read_text(encoding="utf-8")
+    mapping_errors = method_module_mapping_errors(decision_text, method_router, compiler_source)
+    mapping_errors.extend(overlay_module_contract_errors(decision_text, ROOT / "references"))
+    if mapping_errors:
+        fail("; ".join(mapping_errors))
+
+    hypothesis_registry = (SCRIPTS / "hypothesis_registry.py").read_text(encoding="utf-8")
+    for phrase in ("reconcile", "read_only", "no_recent_evidence", "latest_verdict_has_no_corresponding_factor"):
+        if phrase not in hypothesis_registry:
+            fail(f"hypothesis_registry missing reconciliation contract phrase: {phrase}")
+
     memory_self_test = run_json([sys.executable, str(SCRIPTS / "trading_memory.py"), "self-test", "--json"])
     if not memory_self_test.get("ok") or memory_self_test.get("memory_multiplier", 1) >= 1:
         fail(f"trading memory self-test failed: {memory_self_test}")
@@ -589,34 +751,37 @@ def market_router_checks() -> int:
 
 def method_router_checks() -> int:
     count = 0
-    for line in (ROOT / "templates/method-router-evals.jsonl").read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        case = json.loads(line)
-        args = case["args"]
-        cmd = [
-            sys.executable,
-            str(SCRIPTS / "method_router.py"),
-            "--market", args.get("market", "US"),
-            "--horizon", args.get("horizon", "swing"),
-            "--theme", args.get("theme", ""),
-        ]
-        if args.get("options_heavy"):
-            cmd.append("--options-heavy")
-        if args.get("macro_policy"):
-            cmd.append("--macro-policy")
-        got = run_json(cmd)
-        if case.get("expect_scenario") and got.get("scenario") != case["expect_scenario"]:
-            fail(f"method-router expected scenario {case['expect_scenario']} got {got.get('scenario')}")
-        if case.get("must_macro_policy_context") and not got.get("macro_policy_context"):
-            fail("method-router macro_policy_context false")
-        weights = got.get("weights", {})
-        if sum(weights.values()) != case.get("weights_sum", 100):
-            fail(f"method weights sum != 100: {weights}")
-        for k, min_v in case.get("must_weight_gte", {}).items():
-            if weights.get(k, 0) < min_v:
-                fail(f"method weight {k} expected >= {min_v}, got {weights.get(k)}")
-        count += 1
+    with tempfile.TemporaryDirectory(prefix="method-router-state-") as state_root:
+        eval_env = os.environ.copy()
+        eval_env["TRADING_RESEARCH_STATE_DIR"] = state_root
+        for line in (ROOT / "templates/method-router-evals.jsonl").read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            case = json.loads(line)
+            args = case["args"]
+            cmd = [
+                sys.executable,
+                str(SCRIPTS / "method_router.py"),
+                "--market", args.get("market", "US"),
+                "--horizon", args.get("horizon", "swing"),
+                "--theme", args.get("theme", ""),
+            ]
+            if args.get("options_heavy"):
+                cmd.append("--options-heavy")
+            if args.get("macro_policy"):
+                cmd.append("--macro-policy")
+            got = run_json(cmd, env=eval_env)
+            if case.get("expect_scenario") and got.get("scenario") != case["expect_scenario"]:
+                fail(f"method-router expected scenario {case['expect_scenario']} got {got.get('scenario')}")
+            if case.get("must_macro_policy_context") and not got.get("macro_policy_context"):
+                fail("method-router macro_policy_context false")
+            weights = got.get("weights", {})
+            if sum(weights.values()) != case.get("weights_sum", 100):
+                fail(f"method weights sum != 100: {weights}")
+            for k, min_v in case.get("must_weight_gte", {}).items():
+                if weights.get(k, 0) < min_v:
+                    fail(f"method weight {k} expected >= {min_v}, got {weights.get(k)}")
+            count += 1
     return count
 
 

@@ -9,7 +9,7 @@
 - 用知名度/粉丝数抬权重 → 禁止；KOL 仍受 `x_frontline` 封顶。
 - 信号冲突时仍放大风险预算 → 必须收缩或 `no_trade`。
 
-机制蒸馏自公开可追溯框架（Asness–Moskowitz–Pedersen 价值×动量条件交叉；Newfound/Hoffstein 等风险贡献与“一致才放大”），**只移植纪律，不移植历史溢价或产品配置**。不新增动作等级。
+机制参考公开可追溯框架（Asness–Moskowitz–Pedersen 价值×动量条件交叉；Newfound/Hoffstein 等风险贡献与“一致才放大”），**只移植纪律，不移植历史溢价或产品配置**。不新增动作等级。
 
 ## 1. 禁止的融合
 

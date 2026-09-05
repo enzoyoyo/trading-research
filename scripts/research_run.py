@@ -5,6 +5,7 @@ import argparse
 import json
 import subprocess
 import sys
+from strategy_orchestrator import build_strategy_mandate
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,24 +41,24 @@ def generate_scorecard_template(target: str, market_info: dict) -> dict:
         "company": market_info.get("company_name", target),
         "market": f"{market_info.get('market', 'US')}/{market_info.get('exchange', '')}".rstrip("/"),
         "factors": {
-            "demand_inflection": 0,
-            "architecture_coupling": 0,
-            "chokepoint_severity": 0,
-            "supplier_concentration": 0,
-            "expansion_difficulty": 0,
-            "evidence_quality": 0,
-            "valuation_disconnect": 0,
-            "catalyst_timing": 0,
+            "demand_inflection": None,
+            "architecture_coupling": None,
+            "chokepoint_severity": None,
+            "supplier_concentration": None,
+            "expansion_difficulty": None,
+            "evidence_quality": None,
+            "valuation_disconnect": None,
+            "catalyst_timing": None,
         },
         "penalties": {
-            "dilution_financing": 0,
-            "governance": 0,
-            "geopolitics": 0,
-            "liquidity": 0,
-            "hype_risk": 0,
-            "accounting_quality": 0,
-            "cyclicality": 0,
-            "alternative_design_risk": 0,
+            "dilution_financing": None,
+            "governance": None,
+            "geopolitics": None,
+            "liquidity": None,
+            "hype_risk": None,
+            "accounting_quality": None,
+            "cyclicality": None,
+            "alternative_design_risk": None,
         },
         "evidence": [],
         "what_could_weaken_view": ["", "", ""],
@@ -131,6 +132,9 @@ def main() -> int:
     parser.add_argument("target")
     parser.add_argument("--payoff", type=float, default=None)
     parser.add_argument("--scorecard", action="store_true", help="Include bottleneck scorecard template")
+    parser.add_argument("--horizon", choices=["intraday", "overnight_cto", "swing_days", "position_months", "theme_years"])
+    parser.add_argument("--instrument", choices=["equity", "etf", "option"], default="equity")
+    parser.add_argument("--mechanism-input", help="Run explicit local us_mechanism_request.v1 calculator inputs; no order execution")
     parser.add_argument(
         "--query-type",
         choices=["equity", "macro", "sector", "opportunity", "insufficient", "conflict"],
@@ -167,9 +171,10 @@ def main() -> int:
         "method_weights": weights,
         "research_chain": research_contract(args.query_type),
         "decision_chain": decision_contract(args.query_type),
+        "strategy_mandate": build_strategy_mandate(market=mkt, horizon_id=args.horizon, instrument=args.instrument),
         "top_down_context": {
             "longbridge_key_names_present": sorted(set(env_names)),
-            "longbridge_tier": "mcp" if env_names else "cli",  # MCP available when env present
+            "longbridge_tier": "unverified_run_capability_preflight",
             "ibkr_readonly_context": "unavailable unless user provides/export adapter exists",
             "no_order_execution": True,
         },
@@ -181,6 +186,12 @@ def main() -> int:
             "evidence_ladder": "references/evidence-ladder.md",
             "a_share_short_term": "references/a-share-short-term-layer.md",
             "a_share_sentiment_cycle": "references/a-share-sentiment-cycle.md",
+            "a_share_financial_api": "references/financial-api-data-source.md",
+            "us_strategy_campaign": "references/us-strategy-campaign.md",
+            "us_mechanism_research": "references/us-mechanism-research.md",
+            "event_dislocation": "scripts/event_dislocation.py",
+            "conditional_path_study": "scripts/conditional_path_study.py",
+            "options_expression_lab": "scripts/options_expression_lab.py",
             "data_freshness_guard": "scripts/data_freshness_guard.py",
             "factor_research_engine": "references/factor-research-engine.md",
             "factor_deployment_playbook": "references/factor-deployment-playbook.md",
@@ -216,6 +227,9 @@ def main() -> int:
     }
     if args.scorecard:
         output["scorecard_template"] = generate_scorecard_template(args.target, first)
+    if args.mechanism_input:
+        from us_mechanism_research import assemble
+        output["mechanism_research"] = assemble(json.loads(Path(args.mechanism_input).read_text()))
 
     print(json.dumps(output, ensure_ascii=False, indent=2))
     return 0

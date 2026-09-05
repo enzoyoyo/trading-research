@@ -1,5 +1,7 @@
 # Rates / FX / Crypto Overlay
 
+> 主落点声明：编译进 `endogenous_structure`；宏观利率/FX 与加密风险仍按下文进入各自次级模块。
+
 ## 定位（先读，决定这份文件管什么、不管什么）
 
 两档完全不同的处理方式，禁止混用：

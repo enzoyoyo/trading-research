@@ -285,6 +285,122 @@ class ExternalProvenanceMemoryIsolationTests(unittest.TestCase):
         self.assertEqual(calibration_scorecard.collect_pairs([missing_outcome]), [])
         self.assertIsNone(calibration_scorecard.brier([]))
 
+    def test_calibration_discloses_candidate_and_two_abstention_denominators(self) -> None:
+        items = []
+        for index in range(10):
+            decision = {
+                "factors": {"estimated_win_rate": 0.7},
+                "direction": "long",
+            }
+            if 4 <= index < 7:
+                decision["edge_status"] = "no_edge"
+            if index < 4:
+                outcome = "success"
+            elif index < 7:
+                outcome = "failure"
+            else:
+                outcome = "neutral"
+            items.append((decision, {"outcome": outcome}))
+
+        pairs = calibration_scorecard.collect_pairs(items)
+        disclosure = calibration_scorecard.calibration_denominators(items)
+
+        self.assertEqual(len(pairs), 4)
+        self.assertTrue(all(pair["actual"] == 1 for pair in pairs))
+        self.assertEqual(disclosure["candidate_n"], 10)
+        self.assertEqual(disclosure["evaluated_n"], 4)
+        self.assertEqual(disclosure["abstention_rate"], 0.6)
+        self.assertEqual(disclosure["abstention_by_reason"]["no_edge_floor"], 3)
+        self.assertEqual(disclosure["abstention_by_reason"]["outcome_mixed_neutral"], 3)
+        overlapping = calibration_scorecard.calibration_denominators([(
+            {
+                "factors": {"estimated_win_rate": 0.7},
+                "edge_status": "no_edge",
+            },
+            {"outcome": "neutral"},
+        )])
+        self.assertEqual(overlapping["abstention_by_reason"]["no_edge_floor"], 1)
+        self.assertEqual(overlapping["abstention_by_reason"]["outcome_mixed_neutral"], 0)
+        self.assertIsNone(calibration_scorecard.calibration_denominators([])["abstention_rate"])
+        missing_probability = calibration_scorecard.calibration_denominators([(
+            {"edge_status": "no_edge", "factors": {}}, {"outcome": "neutral"},
+        )])
+        self.assertEqual(missing_probability["candidate_n"], 0)
+        self.assertEqual(missing_probability["abstention_by_reason"]["no_edge_floor"], 0)
+
+        boolean_probabilities = calibration_scorecard.calibration_denominators(
+            [({"factors": {"estimated_win_rate": True}}, {"outcome": "success"})],
+            paper_candidates=[{"predicted": False, "actual": 0}],
+        )
+        self.assertEqual(boolean_probabilities["candidate_n"], 0)
+        self.assertEqual(boolean_probabilities["evaluated_n"], 0)
+
+    def test_calibration_round_trip_reads_no_edge_from_decision_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = root / "memory.sqlite"
+            conn = connect(db)
+            decision = {
+                "symbol": "EDGE",
+                "market": "US",
+                "direction": "watch",
+                "action_level": "L0",
+                "factors": {"estimated_win_rate": 0.7},
+                "edge_status": "no_edge",
+                "review_clock": "2099-01-01T00:00:00+00:00",
+            }
+            decision_path = root / "decision.json"
+            decision_path.write_text(json.dumps(decision), encoding="utf-8")
+            recorded = cmd_record_decision(
+                conn, argparse.Namespace(payload=str(decision_path), db=str(db))
+            )
+            result_path = root / "result.json"
+            result_path.write_text(json.dumps({
+                "return_pct": 1.0, "outcome": "success",
+            }), encoding="utf-8")
+            cmd_record_result(conn, argparse.Namespace(
+                payload=str(result_path), decision_id=recorded["decision_id"], db=str(db),
+            ))
+            card = calibration_scorecard.build_scorecard(
+                conn, window=10, min_samples=1, source="skill"
+            )
+            conn.close()
+        self.assertEqual(card["candidate_n"], 1)
+        self.assertEqual(card["evaluated_n"], 0)
+        self.assertEqual(card["abstention_rate"], 1.0)
+        self.assertEqual(card["abstention_by_reason"]["no_edge_floor"], 1)
+        self.assertEqual(card["reason"], "no_evaluated_predictions_after_abstention")
+
+    def test_paper_candidate_denominator_uses_window_not_table_total(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = connect(Path(tmp) / "memory.sqlite")
+            conn.execute(
+                "CREATE TABLE calibration_samples_paper (sample_id TEXT PRIMARY KEY, "
+                "decision_ref TEXT, symbol TEXT, predicted_p REAL, outcome INTEGER, "
+                "source TEXT, recorded_at TEXT, outcome_time TEXT, prediction_field TEXT, "
+                "source_payload_json TEXT)"
+            )
+            for index in range(3):
+                conn.execute(
+                    "INSERT INTO calibration_samples_paper VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        f"paper:{index}", f"decision:{index}", f"P{index}.US", 0.6,
+                        index % 2, "paper", f"2026-01-0{index + 1}T00:00:00Z",
+                        f"2026-01-0{index + 2}T00:00:00Z", "win_rate_proxy", "{}",
+                    ),
+                )
+            conn.commit()
+            card = calibration_scorecard.build_scorecard(
+                conn, window=2, min_samples=1, source="paper"
+            )
+            conn.close()
+        self.assertEqual(card["paper_samples_total"], 3)
+        self.assertEqual(card["candidate_n"], 2)
+        self.assertEqual(card["evaluated_n"], 0)
+        self.assertEqual(card["excluded_n"], 2)
+        self.assertEqual(card["paper_legacy_samples"], 3)
+        self.assertIsNone(card["abstention_rate"])
+
 
 if __name__ == "__main__":
     unittest.main()

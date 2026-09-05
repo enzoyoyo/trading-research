@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This reference locks the Phase 0/1 data contract for the user's event-reaction memory system.
+This reference locks the Phase 0/1 data contract for 用户's event-reaction memory system.
 
 The system separates two layers:
 

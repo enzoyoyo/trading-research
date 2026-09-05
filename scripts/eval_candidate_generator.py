@@ -148,8 +148,9 @@ def build_candidates(stats: dict[str, Any], min_count: int, min_share: float) ->
 def learning_packet_candidates() -> list[dict[str, Any]]:
     """Best-effort: surface System A's own upgrade suggestions for manual mapping.
 
-    These are free-form and cannot be safely auto-mapped to compiler posture, so
-    they are always manual_review, never auto-staged as runnable guards."""
+    Structured v1 failure evidence carries stable IDs and review dispositions.
+    Neither a structured diagnosis nor legacy prose defines compiler posture:
+    both stay manual_review until a concrete method mapping is validated."""
     try:
         from self_optimization_check import latest_learning_packet
 
@@ -157,6 +158,17 @@ def learning_packet_candidates() -> list[dict[str, Any]]:
     except Exception as exc:  # pragma: no cover - defensive for cron environments
         return [{"reason": "learning_packet_read_failed", "error": type(exc).__name__, "message": str(exc)}]
     out: list[dict[str, Any]] = []
+    structured = packet.get("paper_learning_consumption") or {}
+    if structured.get("structured_evidence_present") is True:
+        for cand in structured.get("candidates") or []:
+            out.append({"source": "learning_packet", "candidate": cand,
+                        "reason": cand.get("reason", "method_mapping_and_validation_required"),
+                        "review_state": cand.get("review_state", "awaiting_evidence"),
+                        "no_order_execution": True})
+        if structured.get("status") != "present":
+            out.append({"source": "learning_packet", "reason": "structured_learning_evidence_unavailable",
+                        "data_gaps": structured.get("data_gaps") or [], "review_state": "awaiting_evidence"})
+        return out
     for cand in packet.get("skill_upgrade_candidates") or []:
         out.append(
             {

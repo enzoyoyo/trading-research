@@ -37,6 +37,15 @@ class EarningsMoveHistoryTests(unittest.TestCase):
         self.assertEqual(got["status"], "partial")
         self.assertTrue(got["no_order_execution"])
 
+    def test_open_boundary_uses_new_york_dst_not_fixed_utc_offset(self):
+        for stamp, expected in [
+            ("2026-01-20T14:29:00Z", "BMO"), ("2026-01-20T14:31:00Z", "intraday"),
+            ("2026-07-20T13:29:00Z", "BMO"), ("2026-07-20T13:31:00Z", "intraday"),
+            ("2026-01-20T21:05:00Z", "AMC"), ("2026-07-20T20:05:00Z", "AMC"),
+        ]:
+            with self.subTest(stamp=stamp):
+                self.assertEqual(subject._classify_session(stamp)[0], expected)
+
     def test_unknown_session_and_small_sample_fail_closed(self) -> None:
         events = [
             {"form_type": "8-K", "filed_at": "2026-04-20", "source_family": "sec_edgar", "accession_number": "A"},

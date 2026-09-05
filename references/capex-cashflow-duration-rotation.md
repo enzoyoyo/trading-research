@@ -1,5 +1,7 @@
 # Capex Cashflow Duration Rotation · Capex 收钱方/花钱方与现金流久期轮动
 
+> 主落点声明：编译进 `endogenous_structure`；`macro` / `fundamentals` 是下文的次级证据落点。
+
 ## 核心命题
 
 同一个 AI / 半导体叙事里，先拆两类公司：

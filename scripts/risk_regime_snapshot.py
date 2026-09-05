@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import mean
 from typing import Any
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -25,11 +27,29 @@ except ImportError:  # pragma: no cover
 STATE_ROOT = Path(os.environ.get("TRADING_RESEARCH_STATE_DIR") or (Path.home() / ".cache" / "hermes" / "trading-research"))
 RISK_STATE_DIR = STATE_ROOT / "risk_regime"
 HISTORY_DIR = RISK_STATE_DIR / "history"
+CURRENT_SNAPSHOT_PATH = RISK_STATE_DIR / "current.json"
+LOCAL_TIMEZONE = ZoneInfo("Asia/Shanghai")
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range_}&interval={interval}&includePrePost=false"
 
 
 def iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def save_current_snapshot(payload: dict[str, Any], path: Path | None = None) -> str:
+    """Atomically persist the full risk snapshot for same-session consumers."""
+    target = path or CURRENT_SNAPSHOT_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return str(target)
 
 
 def pct_change(old: float | None, new: float | None) -> float | None:
@@ -300,19 +320,73 @@ def save_snapshot(index_symbol: str, payload: dict[str, Any]) -> str:
                 latest_near = latest.get("near") or {}
                 payload_agg = payload.get("aggregate") or {}
                 payload_near = payload.get("near") or {}
-                same_signature = all([
-                    latest_agg.get("total_net_gex") == payload_agg.get("total_net_gex"),
-                    latest_agg.get("put_wall") == payload_agg.get("put_wall"),
-                    latest_agg.get("call_wall") == payload_agg.get("call_wall"),
-                    latest_near.get("total_net_gex") == payload_near.get("total_net_gex"),
-                    latest_near.get("put_wall") == payload_near.get("put_wall"),
-                    latest_near.get("call_wall") == payload_near.get("call_wall"),
-                ])
+                signature_fields = (
+                    "total_net_gex", "put_wall", "call_wall", "gamma_flip",
+                    "gamma_flip_method", "gamma_flip_status", "dealer_sign_assumption",
+                    "gamma_profile", "source", "spot", "regime", "expirations_used",
+                )
+                same_signature = all(
+                    old.get(key) == new.get(key)
+                    for old, new in ((latest_agg, payload_agg), (latest_near, payload_near))
+                    for key in signature_fields
+                )
                 if same_signature:
                     return str(path)
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
     return str(path)
+
+
+def _gamma_number(value: Any) -> float | None:
+    try:
+        number = float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+    return number if number is not None and math.isfinite(number) else None
+
+
+def _gamma_vendor_total(snapshot: dict[str, Any]) -> float | None:
+    # Older options_gamma no-data snapshots carry total=0 with regime=unknown.
+    return None if snapshot.get("regime") == "unknown" else _gamma_number(snapshot.get("total_net_gex"))
+
+
+def _gamma_history_row(snapshot: dict[str, Any]) -> dict[str, Any]:
+    keys = ("symbol", "spot", "total_net_gex", "regime", "put_wall", "call_wall",
+            "gamma_flip", "source", "gamma_flip_method", "gamma_flip_status",
+            "dealer_sign_assumption", "gamma_profile", "expirations_used")
+    row = {key: snapshot.get(key) for key in keys}
+    row["total_net_gex"] = _gamma_vendor_total(snapshot)
+    return row
+
+
+def _same_gamma_basis(old: dict[str, Any], new: dict[str, Any]) -> bool:
+    # Unversioned legacy rows are not a valid baseline for a new modeled root.
+    required = ("gamma_flip_method", "dealer_sign_assumption", "source")
+    if not all(new.get(key) and old.get(key) == new.get(key) for key in required):
+        return False
+    if not new.get("expirations_used") or old.get("expirations_used") != new.get("expirations_used"):
+        return False
+    old_profile, new_profile = old.get("gamma_profile") or {}, new.get("gamma_profile") or {}
+    assumptions = ("rate", "dividend_yield", "contract_multiplier", "iv_assumption", "time_basis")
+    return all(old_profile.get(key) == new_profile.get(key) for key in assumptions)
+
+
+def _gamma_comparison_clock(previous: dict[str, Any] | None, current: dict[str, Any]) -> dict[str, Any]:
+    result = {"previous_generated_at": (previous or {}).get("generated_at"),
+              "current_generated_at": current["generated_at"], "elapsed_seconds": None,
+              "basis": "unknown", "clock_kind": "collection_time_not_exchange_quote_time"}
+    try:
+        old = datetime.fromisoformat(str(result["previous_generated_at"]).replace("Z", "+00:00"))
+        new = datetime.fromisoformat(str(result["current_generated_at"]).replace("Z", "+00:00"))
+        if old.tzinfo is None or new.tzinfo is None or old >= new:
+            return result
+        result["elapsed_seconds"] = (new-old).total_seconds()
+        et = ZoneInfo("America/New_York")
+        result["basis"] = ("intraday_collection_delta" if old.astimezone(et).date() == new.astimezone(et).date()
+                           else "cross_date_collection_delta")
+    except (ValueError, TypeError):
+        pass
+    return result
 
 
 def build_gex_signal(index_symbol: str) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
@@ -321,44 +395,29 @@ def build_gex_signal(index_symbol: str) -> tuple[dict[str, Any], dict[str, Any],
     near = run_gamma_snapshot(index_symbol, near=True)
     previous = load_previous_snapshot(index_symbol)
     current_payload = {
-        "generated_at": iso_now(),
-        "index_symbol": index_symbol.upper(),
-        "aggregate": {
-            "symbol": aggregate.get("symbol"),
-            "spot": aggregate.get("spot"),
-            "total_net_gex": aggregate.get("total_net_gex"),
-            "regime": aggregate.get("regime"),
-            "put_wall": aggregate.get("put_wall"),
-            "call_wall": aggregate.get("call_wall"),
-            "gamma_flip": aggregate.get("gamma_flip"),
-            "source": aggregate.get("source"),
-        },
-        "near": {
-            "symbol": near.get("symbol"),
-            "spot": near.get("spot"),
-            "total_net_gex": near.get("total_net_gex"),
-            "regime": near.get("regime"),
-            "put_wall": near.get("put_wall"),
-            "call_wall": near.get("call_wall"),
-            "gamma_flip": near.get("gamma_flip"),
-            "source": near.get("source"),
-        },
+        "generated_at": iso_now(), "index_symbol": index_symbol.upper(),
+        "aggregate": _gamma_history_row(aggregate), "near": _gamma_history_row(near),
     }
-    current_total = float((current_payload["aggregate"].get("total_net_gex") or 0))
+    comparison_clock = _gamma_comparison_clock(previous, current_payload)
+    current_total = _gamma_vendor_total(aggregate)
     prev_total = None
     confirmed_flags: list[str] = []
     comparable = False
+    flip_comparable = False
     put_wall_shift = None
     flip_shift = None
     if previous and isinstance(previous, dict):
         prev_agg = previous.get("aggregate") or {}
-        if prev_agg.get("total_net_gex") is not None:
-            comparable = True
-            prev_total = float(prev_agg.get("total_net_gex") or 0)
-            prev_put_wall = prev_agg.get("put_wall")
-            prev_flip = prev_agg.get("gamma_flip")
-            put_wall_shift = pct_change(prev_put_wall, current_payload["aggregate"].get("put_wall"))
-            flip_shift = pct_change(prev_flip, current_payload["aggregate"].get("gamma_flip"))
+        prev_total = _gamma_vendor_total(prev_agg)
+        comparable = (_same_gamma_basis(prev_agg, aggregate) and comparison_clock["basis"] != "unknown"
+                      and prev_total is not None and current_total is not None)
+        if comparable:
+            put_wall_shift = pct_change(_gamma_number(prev_agg.get("put_wall")), _gamma_number(aggregate.get("put_wall")))
+            flip_comparable = (prev_agg.get("gamma_flip_status") == aggregate.get("gamma_flip_status") == "modeled"
+                               and _gamma_number(prev_agg.get("gamma_flip")) is not None
+                               and _gamma_number(aggregate.get("gamma_flip")) is not None)
+            if flip_comparable:
+                flip_shift = pct_change(_gamma_number(prev_agg.get("gamma_flip")), _gamma_number(aggregate.get("gamma_flip")))
             if prev_total > 0 and current_total < 0:
                 confirmed_flags.append("positive_to_negative")
             if prev_total > 0 and current_total <= prev_total * 0.7:
@@ -367,7 +426,11 @@ def build_gex_signal(index_symbol: str) -> tuple[dict[str, Any], dict[str, Any],
                 confirmed_flags.append("put_wall_down_1pct")
             if flip_shift is not None and flip_shift <= -1.0:
                 confirmed_flags.append("gamma_flip_down_1pct")
-    confirmed_outflow = comparable and (
+        if not _same_gamma_basis(prev_agg, aggregate):
+            gaps.append("GEX 历史缺少相同方法/持仓方向假设/模型参数/到期窗口，不比较新旧 flip 或认定同口径弱化")
+        if comparison_clock["basis"] == "unknown":
+            gaps.append("GEX 前值采集时钟缺失/无效/非早于当前；不能认定历史代理变化")
+    historical_proxy_weakening = comparable and (
         "positive_to_negative" in confirmed_flags or (
             "support_down_30pct" in confirmed_flags and (
                 "put_wall_down_1pct" in confirmed_flags or "gamma_flip_down_1pct" in confirmed_flags
@@ -375,57 +438,74 @@ def build_gex_signal(index_symbol: str) -> tuple[dict[str, Any], dict[str, Any],
         )
     )
 
-    spot = current_payload["aggregate"].get("spot")
-    put_wall = current_payload["aggregate"].get("put_wall")
-    gamma_flip = current_payload["aggregate"].get("gamma_flip")
-    aggregate_regime = current_payload["aggregate"].get("regime")
-    near_regime = current_payload["near"].get("regime")
+    spot = _gamma_number(aggregate.get("spot"))
+    put_wall = _gamma_number(aggregate.get("put_wall"))
+    gamma_flip = _gamma_number(aggregate.get("gamma_flip"))
     proxy_flags: list[str] = []
-    if aggregate_regime == "negative_gamma":
-        proxy_flags.append("aggregate_negative_gamma")
-    if near_regime == "negative_gamma":
-        proxy_flags.append("near_negative_gamma")
-    if isinstance(spot, (int, float)) and isinstance(put_wall, (int, float)) and spot < put_wall:
+    effective_regimes: dict[str, str] = {}
+    sign_bases: dict[str, str] = {}
+    for scope, row in (("aggregate", aggregate), ("near", near)):
+        if row.get("gamma_flip_method") == "hypothetical_spot_bs_gamma_v1":
+            # A valid one-sign profile has no root but still has an observed-spot modeled value.
+            total = _gamma_number((row.get("gamma_profile") or {}).get("spot_net_gex"))
+            sign_bases[scope] = "hypothetical_spot_bs_assumed_dealer_sign_proxy"
+            if total is None and _gamma_vendor_total(row) is not None:
+                # Missing IV/exact 0DTE time blocks a modeled root, not the
+                # separately observed provider gamma/OI snapshot at this spot.
+                total = _gamma_vendor_total(row)
+                sign_bases[scope] = "vendor_snapshot_assumed_dealer_sign_proxy"
+                gaps.append(scope + " BS profile unavailable; sign uses separate vendor gamma snapshot, flip remains unknown")
+        else:
+            total = _gamma_vendor_total(row)
+            sign_bases[scope] = "vendor_snapshot_assumed_dealer_sign_proxy"
+        effective_regimes[scope] = "unknown" if total is None else ("negative_gamma" if total < 0 else "positive_gamma" if total > 0 else "neutral_gamma")
+        if total is not None and total < 0:
+            proxy_flags.append(scope + "_negative_gamma")
+        if total is None:
+            gaps.append(scope + " GEX 符号 unknown：模型/供应商值缺失，未替换为零")
+    if spot is not None and put_wall is not None and spot < put_wall:
         proxy_flags.append("spot_below_put_wall")
-    if isinstance(spot, (int, float)) and isinstance(gamma_flip, (int, float)) and spot < gamma_flip:
-        proxy_flags.append("spot_below_gamma_flip")
-    proxy_triggered = len(proxy_flags) >= 2 or ("near_negative_gamma" in proxy_flags and "spot_below_put_wall" in proxy_flags)
-    triggered = confirmed_outflow or proxy_triggered
+    # Root orientation may reverse; spot<flip is geometry, never proof of negative gamma.
+    proxy_triggered = len(proxy_flags) >= 2
+    triggered = historical_proxy_weakening or proxy_triggered
     mode = "stable"
-    if confirmed_outflow:
-        mode = "confirmed_outflow"
+    if historical_proxy_weakening:
+        mode = "snapshot_to_snapshot_gex_weakening_proxy"
     elif proxy_triggered:
         mode = "dealer_support_weak_proxy"
         if not comparable:
             gaps.append("指数 GEX 暂无同口径前值，只能写 dealer support weak proxy，不能硬写出逃")
-    reason = "指数 GEX 未见明显恶化"
-    if confirmed_outflow:
-        reason = f"{index_symbol.upper()} 同口径历史显示 GEX 支撑下降：{', '.join(confirmed_flags)}"
+    elif all(value == "unknown" for value in effective_regimes.values()):
+        mode = "unknown"
+    reason = "指数 GEX 代理未见明显恶化；不代表观测到做市商持仓"
+    if historical_proxy_weakening:
+        reason = f"{index_symbol.upper()} 同口径供应商 GEX 快照代理变化（{comparison_clock['basis']}）：{', '.join(confirmed_flags)}；不证明 dealer 出逃或日频历史优势"
     elif proxy_triggered:
-        reason = f"{index_symbol.upper()} 当前结构偏脆：{', '.join(proxy_flags)}"
+        reason = f"{index_symbol.upper()} 假设持仓方向下结构偏脆：{', '.join(proxy_flags)}"
+    elif mode == "unknown":
+        reason = "指数 GEX 符号 unknown，无法判断代理结构是否恶化"
     signal = signal_dict(
-        key="index_gex_regime",
-        title="指数 GEX 弱化",
-        layer="options_structure",
-        triggered=triggered,
-        source=f"options_gamma.py {index_symbol.upper()} aggregate+near",
+        key="index_gex_regime", title="指数 GEX 弱化", layer="options_structure",
+        triggered=triggered, source=f"options_gamma.py {index_symbol.upper()} aggregate+near",
         reason=reason,
         metrics={
-            "aggregate_regime": aggregate_regime,
-            "near_regime": near_regime,
-            "aggregate_total_net_gex": current_total,
-            "near_total_net_gex": current_payload["near"].get("total_net_gex"),
-            "spot": spot,
-            "put_wall": put_wall,
-            "gamma_flip": gamma_flip,
-            "prev_aggregate_total_net_gex": prev_total,
-            "put_wall_shift_pct": put_wall_shift,
-            "gamma_flip_shift_pct": flip_shift,
-            "confirmed_flags": confirmed_flags,
-            "proxy_flags": proxy_flags,
+            "aggregate_regime": effective_regimes["aggregate"], "near_regime": effective_regimes["near"],
+            "aggregate_total_net_gex": current_total, "near_total_net_gex": _gamma_vendor_total(near),
+            "total_net_gex_semantics": "vendor_snapshot_assumed_dealer_sign_proxy",
+            "gamma_sign_basis": sign_bases,
+            "aggregate_model_spot_net_gex": _gamma_number((aggregate.get("gamma_profile") or {}).get("spot_net_gex")),
+            "near_model_spot_net_gex": _gamma_number((near.get("gamma_profile") or {}).get("spot_net_gex")),
+            "spot": spot, "put_wall": put_wall, "gamma_flip": gamma_flip,
+            "gamma_flip_method": aggregate.get("gamma_flip_method"), "gamma_flip_status": aggregate.get("gamma_flip_status"),
+            "dealer_sign_assumption": aggregate.get("dealer_sign_assumption"),
+            "observed_dealer_inventory": False,
+            "prev_aggregate_total_net_gex": prev_total, "put_wall_shift_pct": put_wall_shift,
+            "comparison_clock": comparison_clock,
+            "gamma_flip_shift_pct": flip_shift, "flip_comparable_history": flip_comparable,
+            "confirmed_flags_semantics": "snapshot_proxy_change_only_not_observed_flow_or_fixed_horizon_history",
+            "confirmed_flags": confirmed_flags, "proxy_flags": proxy_flags,
         },
-        mode=mode,
-        comparable_history=comparable,
+        mode=mode, comparable_history=comparable,
     )
     return signal, current_payload, gaps
 
@@ -491,10 +571,16 @@ def collect(subject: str, market: str | None, no_store: bool, index_symbol: str)
     if inferred_market not in {"US", "HK"}:
         notes.append("当前标的不是美股/港股；本 risk regime 仍可作为跨市场风险背景，但优先级低于本地制度性结构")
 
-    return {
+    generated_at = datetime.now(timezone.utc)
+    local_generated_at = generated_at.astimezone(LOCAL_TIMEZONE)
+    stale_after = local_generated_at.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    result = {
+        "schema_version": "risk_regime_snapshot.v1",
         "subject": subject,
         "market": inferred_market,
-        "generated_at": iso_now(),
+        "generated_at": generated_at.isoformat(),
+        "snapshot_date": local_generated_at.date().isoformat(),
+        "stale_after": stale_after.isoformat(),
         "applicable": True,
         "index_symbol": index_symbol.upper(),
         "state_dir": str(RISK_STATE_DIR),
@@ -517,6 +603,12 @@ def collect(subject: str, market: str | None, no_store: bool, index_symbol: str)
         "sources": sources,
         "notes": notes,
     }
+    if no_store:
+        result["snapshot_path"] = None
+    else:
+        result["snapshot_path"] = str(CURRENT_SNAPSHOT_PATH)
+        save_current_snapshot(result)
+    return result
 
 
 def main() -> int:

@@ -8,9 +8,11 @@ lifecycle is fully closed. Release validation imports this bundled module only.
 from __future__ import annotations
 
 import re
+import hashlib
+import json
 from collections import defaultdict
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 OPEN_STATUSES = {"open", "filled_open"}
@@ -68,7 +70,10 @@ def number(value: Any) -> float | None:
 
 
 def normalize_symbol(value: Any) -> str:
-    return str(value or "").strip().upper()
+    text = str(value or "").strip().upper()
+    if text.endswith('.HK') and text[:-3].isdigit():
+        return text[:-3].zfill(4) + '.HK'
+    return text
 
 
 def lifecycle_id(symbol: str, entry_ref: Any) -> str:
@@ -449,3 +454,137 @@ def resolve_active_lifecycle(
         if active
         else None
     )
+
+def cost_decimal(value: Any) -> Decimal | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        result = Decimal(str(value))
+        return result if result.is_finite() else None
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
+def matches_reported_average(value: Any, exact: Decimal) -> bool:
+    """Compare at the receipt's decimal scale, never coarser than one cent.
+
+    Local reconciliation convention: half-up rounding, not an asserted broker
+    rounding specification. The exact executions average remains the P/L input.
+    """
+    reported = cost_decimal(value)
+    if reported is None or not reported.is_finite() or not exact.is_finite():
+        return False
+    quantum = Decimal(1).scaleb(min(reported.as_tuple().exponent, -2))
+    try:
+        return exact.quantize(quantum, rounding=ROUND_HALF_UP) == reported
+    except InvalidOperation:
+        return False
+
+
+def final_order_cost(evidence: dict[str, Any], symbol: str, side: str, quantity: Decimal,
+                     price: Decimal) -> tuple[Decimal, str] | None:
+    """Accept only full filled orders with explicit settled, no-rebate charges.
+
+    Longbridge documents NO_DATA as settled with no deduction data. Other
+    deduction states or commission-free adjustments need separate accounting.
+    """
+    if (evidence.get("status") not in {"Filled", "FilledStatus"} or normalize_symbol(evidence.get("symbol")) != normalize_symbol(symbol)
+            or evidence.get("side") != side or not evidence.get("order_id")
+            or cost_decimal(evidence.get("quantity")) != quantity
+            or cost_decimal(evidence.get("executed_quantity")) != quantity
+            or not matches_reported_average(evidence.get("executed_price"), price)
+            or evidence.get("deductions_status") != "NO_DATA"
+            or evidence.get("platform_deducted_status") != "NO_DATA"
+            or evidence.get("free_status") != "None"
+            or cost_decimal(evidence.get("free_amount")) != Decimal("0")):
+        return None
+    currency = evidence.get("currency")
+    charge = evidence.get("charge_detail")
+    if not isinstance(currency, str) or not currency or not isinstance(charge, dict):
+        return None
+    total = cost_decimal(charge.get("total_amount"))
+    items = charge.get("items")
+    if (total is None or not total.is_finite() or total < 0
+            or charge.get("currency") != currency or not isinstance(items, list)):
+        return None
+    amounts = []
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get("fees"), list):
+            return None
+        for fee in item["fees"]:
+            if not isinstance(fee, dict) or fee.get("currency") != currency:
+                return None
+            amount = cost_decimal(fee.get("amount"))
+            if amount is None or not amount.is_finite() or amount < 0:
+                return None
+            amounts.append(amount)
+    if sum(amounts, Decimal("0")) != total:
+        return None
+    return total, currency
+
+
+def cost_receipt_target_sha256(row: dict[str, Any]) -> str:
+    """Bind a later cost receipt to the exact immutable original close row."""
+    return hashlib.sha256(json.dumps(row, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def settled_cost_row(row: dict[str, Any], trade: dict[str, Any], outcomes: list[dict[str, Any]]) -> dict[str, Any]:
+    """Resolve append-only cost evidence without adding a second exit/fill."""
+    candidates = [r for r in outcomes if r.get("event_type") == "paper_trade_outcome_cost_receipt"
+                  and r.get("target_close_sha256") == cost_receipt_target_sha256(row)]
+    if not candidates:
+        return row
+    # Identical repeated receipts are harmless; conflicting receipts are unknown.
+    unique = {json.dumps(r, sort_keys=True): r for r in candidates}
+    if len(unique) != 1:
+        return {**row, "costs_included": False, "costs_pending": True}
+    receipt = next(iter(unique.values()))
+    if (receipt.get("trade_lifecycle_id") != trade.get("trade_lifecycle_id")
+            or receipt.get("entry_order_id") != trade.get("entry_order_id")
+            or receipt.get("exit_order_id") != row_order_id(row)
+            or normalize_symbol(receipt.get("symbol")) != normalize_symbol(trade.get("symbol"))
+            or receipt.get("quantity") != row.get("quantity")
+            or parse_dt(receipt.get("timestamp_utc")) == datetime.max.replace(tzinfo=timezone.utc)
+            or parse_dt(receipt.get("timestamp_utc")) < parse_dt(row.get("timestamp_utc"))
+            or parse_dt(receipt.get("timestamp_utc")) > datetime.now(timezone.utc)
+            or not valid_cost_receipt(receipt, row, trade)):
+        return {**row, "costs_included": False, "costs_pending": True}
+    fields = ("net_pnl", "net_pnl_currency", "costs_included", "costs_pending",
+              "cost_evidence_refs", "cost_receipts", "cost_allocation")
+    return {**row, **{k: receipt.get(k) for k in fields}}
+
+
+def valid_cost_receipt(receipt: dict[str, Any], row: dict[str, Any], trade: dict[str, Any]) -> bool:
+    """Recheck provenance and net arithmetic before consuming a late receipt."""
+    evidence = receipt.get("cost_receipts")
+    entry = trade.get("entry_payload") or {}
+    quantity = cost_decimal(row.get("quantity"))
+    entry_price = cost_decimal(entry.get("entry_price"))
+    exit_price = cost_decimal(row.get("exit_price"))
+    if (receipt.get("status") != "cost_receipt" or row.get("status") != "closed"
+            or receipt.get("costs_included") is not True or receipt.get("costs_pending") is not False
+            or receipt.get("cost_allocation") != "single_entry_single_full_exit"
+            or len(trade.get("exits") or []) != 1 or entry.get("fill_confirmed") is not True
+            or not isinstance(evidence, list) or len(evidence) != 2
+            or any(v is None or v <= 0 for v in (quantity, entry_price, exit_price))
+            or cost_decimal(entry.get("quantity")) != quantity):
+        return False
+    costs, refs = [], []
+    for item, oid, side, price in zip(evidence, [trade.get("entry_order_id"), row_order_id(row)],
+                                    ["Buy", "Sell"], [entry_price, exit_price]):
+        if not isinstance(item, dict) or item.get("order_id") != oid:
+            return False
+        # An explicit broker update in the future cannot establish settled costs.
+        if "updated_at" in item and parse_dt(item["updated_at"]) > parse_dt(receipt.get("timestamp_utc")):
+            return False
+        cost = final_order_cost(item, trade.get("symbol"), side, quantity, price)
+        if cost is None:
+            return False
+        costs.append(cost)
+        refs.append("longbridge:order_detail:" + oid + ":sha256:" +
+                    hashlib.sha256(json.dumps(item, sort_keys=True, separators=(",", ":")).encode()).hexdigest())
+    net = cost_decimal(receipt.get("net_pnl"))
+    expected = float((exit_price-entry_price)*quantity-costs[0][0]-costs[1][0])
+    return (costs[0][1] == costs[1][1] == receipt.get("net_pnl_currency")
+            and receipt.get("cost_evidence_refs") == refs and net is not None
+            and net == Decimal(str(expected)))

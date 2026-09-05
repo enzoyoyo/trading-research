@@ -190,7 +190,15 @@ def render_markdown(digest: dict[str, Any]) -> str:
         lines.append(f"- 一切正常（近 {led['runs_last_7']} 次自检）。当前版本 {led['latest_version'] or '未知'}。")
     else:
         for issue in led["health_issues"]:
-            lines.append(f"- ⚠️ {issue.get('type')}：连续 {issue.get('consecutive_runs', issue.get('to', '?'))} 次")
+            if isinstance(issue.get("consecutive_days"), int):
+                detail = f"连续 {issue['consecutive_days']} 天"
+            elif isinstance(issue.get("consecutive_runs"), int):
+                detail = f"连续 {issue['consecutive_runs']} 次"
+            elif isinstance(issue.get("from"), int) and isinstance(issue.get("to"), int):
+                detail = f"{issue['from']} → {issue['to']}"
+            else:
+                detail = "详情见结构化 ledger health"
+            lines.append(f"- ⚠️ {issue.get('type')}：{detail}")
     lines.append("")
     lines.append("> 本摘要只读、不下单、不自动改 skill；所有改动仍要过 materiality + before/after eval 门。")
     return "\n".join(lines)

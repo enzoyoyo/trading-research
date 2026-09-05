@@ -18,6 +18,70 @@ KOL_TEST_NOW = datetime(2026, 8, 22, tzinfo=UTC)
 
 
 class ReportCoverageContractTests(unittest.TestCase):
+    def test_numeric_win_rate_requires_shared_denominator_but_bare_phrase_still_passes(self) -> None:
+        skill_root = Path(__file__).resolve().parents[1]
+        baseline = (skill_root / "templates" / "report-contract-pass.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("追高胜率下降", baseline)
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "report.md"
+            report.write_text(baseline, encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(validate_report.validate(report), 0)
+
+            report.write_text(
+                baseline.replace("追高胜率下降", "胜率 ６７％（n=4，弃权率 60%）"),
+                encoding="utf-8",
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(validate_report.validate(report), 0)
+
+            report.write_text(
+                baseline.replace("追高胜率下降", "胜率 100%"),
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), self.assertRaises(SystemExit):
+                validate_report.validate(report)
+            self.assertIn("evaluated_n", output.getvalue())
+
+            report.write_text(
+                baseline.replace("追高胜率下降", "胜率 100%（n=4）"),
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), self.assertRaises(SystemExit):
+                validate_report.validate(report)
+            self.assertIn("abstention_rate", output.getvalue())
+
+            report.write_text(
+                baseline.replace("追高胜率下降", "胜率 100%（n=4，弃权率 60%）"),
+                encoding="utf-8",
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(validate_report.validate(report), 0)
+
+            report.write_text(
+                baseline.replace(
+                    "追高胜率下降",
+                    "win rate 1.0（evaluated_n=4，abstention_rate=0）",
+                ),
+                encoding="utf-8",
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(validate_report.validate(report), 0)
+
+    def test_numeric_win_stat_patterns_cover_examples_without_matching_bare_words(self) -> None:
+        for text in (
+            "胜率 67%", "命中率 8/12", "win rate 0.64", "准确率为0.71",
+            "win rate 1.0", "胜率 0",
+        ):
+            with self.subTest(text=text):
+                self.assertIsNotNone(validate_report.NUMERIC_WIN_STAT_PATTERN.search(text))
+        self.assertIsNone(validate_report.NUMERIC_WIN_STAT_PATTERN.search("追高胜率下降"))
+        self.assertIsNone(validate_report.NUMERIC_WIN_STAT_PATTERN.search("accuracy improved"))
+
     def purpose_bound_report_fixture(self, root: Path) -> tuple[Path, Path]:
         skill_root = Path(__file__).resolve().parents[1]
         report_text = (skill_root / "templates" / "report-contract-pass.md").read_text(

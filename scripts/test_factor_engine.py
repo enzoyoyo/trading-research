@@ -39,6 +39,98 @@ class FactorEngineTests(unittest.TestCase):
         self.assertGreater(result["train"]["alpha_t"], 3.5)
         self.assertGreater(result["test"]["alpha_t"], 3.5)
 
+    @staticmethod
+    def persistent_signal_panels(days: int = 180, symbols: int = 20) -> dict[str, list[dict]]:
+        """Synthetic price panels with persistent per-symbol drift and real weak alpha."""
+        rng = random.Random(2027)
+        rho, beta = 0.95, 0.003
+        latent = [rng.gauss(0.0, 1.0) for _ in range(symbols)]
+        prices = [100.0] * symbols
+        panels = {f"S{symbol:02d}": [] for symbol in range(symbols)}
+        for day in range(days):
+            for symbol in range(symbols):
+                latent[symbol] = rho * latent[symbol] + (1 - rho * rho) ** 0.5 * rng.gauss(0.0, 1.0)
+            for symbol in range(symbols):
+                daily_return = beta * latent[symbol] + rng.gauss(0.0, 0.01)
+                prices[symbol] *= 1.0 + daily_return
+                panels[f"S{symbol:02d}"].append({
+                    "date": f"D{day:03d}", "close": prices[symbol],
+                    "low": prices[symbol] * 0.99, "high": prices[symbol] * 1.01,
+                    "amount": 1_000_000.0 + symbol * 10_000,
+                    "turnover_rate": 1.0 + symbol * 0.01,
+                })
+        return panels
+
+    def test_circular_null_three_acceptance_gates_on_synthetic_panels(self) -> None:
+        panels = self.persistent_signal_panels()
+        with mock.patch("factor_engine.load_panels", return_value=(panels, [], "qfq")):
+            result = engine.compare_engine_nulls(
+                "US", list(panels), ["mom_20_1"], [1], null_trials=100, seed=42,
+                min_cross_section=15, min_dates=40,
+            )
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(result["invariants"]["circular_random_ic_std_strictly_wider_for_every_comparable_pair"])
+        self.assertTrue(result["invariants"]["circular_alpha_t_never_increases"])
+        self.assertEqual(result["state_changes"], [{
+            "factor": "mom_20_1", "horizon": 1,
+            "before": "confirmed_alive", "after": "noise",
+        }])
+        self.assertEqual(result["default_null_recommendation"], "circular_rotation")
+
+    def test_circular_offsets_are_independent_non_degenerate_and_persisted(self) -> None:
+        rows = self.signal_observations(days=30, symbols=12)
+        result = engine.evaluate_observations(
+            rows, null_trials=30, seed=73, min_cross_section=10, min_dates=20,
+            null_kind="circular_rotation",
+        )
+        audit = result["null_audit"]["overall"]
+        self.assertEqual(audit["null_kind"], "circular_rotation")
+        self.assertEqual(audit["seed"], 73)
+        self.assertEqual(len(audit["offsets_by_trial"]), 30)
+        self.assertTrue(any(len(set(offsets)) > 1 for offsets in audit["offsets_by_trial"]))
+        for offsets in audit["offsets_by_trial"]:
+            for symbol, offset in zip(audit["offset_symbols"], offsets):
+                low, high = audit["offset_bounds"][symbol]
+                self.assertGreaterEqual(offset, low)
+                self.assertLessEqual(offset, high)
+
+    def test_cross_source_symbol_exits_null_but_not_real_ic(self) -> None:
+        rows = self.signal_observations(days=30, symbols=12)
+        marked = [
+            {**row, "null_eligible": row["symbol"] != "0"}
+            for row in rows
+        ]
+        full = engine.evaluate_observations(
+            rows, null_trials=30, seed=42, min_cross_section=10, min_dates=20,
+            null_kind="circular_rotation",
+        )
+        excluded = engine.evaluate_observations(
+            marked, null_trials=30, seed=42, min_cross_section=10, min_dates=20,
+            null_kind="circular_rotation",
+        )
+        self.assertEqual(excluded["mean_ic"], full["mean_ic"])
+        self.assertEqual(excluded["null_excluded_symbols"], ["0"])
+        self.assertIn(
+            "cross_source_symbol_history_excluded_from_random_control",
+            {gap["gap"] for gap in excluded["data_gaps"]},
+        )
+
+    def test_load_panels_marks_cross_source_history_null_ineligible(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            market = root / "US"
+            market.mkdir()
+            payload = {
+                "schema_version": "factor_panel_symbol.v1",
+                "panel_sources": ["akshare", "longbridge"],
+                "adjust_basis": "mixed_fixture",
+                "rows": [{"date": "2026-01-01", "close": 10.0}],
+            }
+            (market / "SPY.json").write_text(json.dumps(payload), encoding="utf-8")
+            panels, gaps, _basis = engine.load_panels("US", ["SPY"], root)
+        self.assertFalse(panels["SPY"][0]["null_eligible"])
+        self.assertFalse(gaps)
+
     def test_pure_noise_is_not_significant(self) -> None:
         rng = random.Random(1234)
         rows = []
@@ -258,6 +350,11 @@ class FactorEngineTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("default-enabled", proc.stdout)
         self.assertIn("range_pos_252", proc.stdout)
+        args = engine.build_parser().parse_args([
+            "run", "--market", "US", "--symbols", "SPY",
+        ])
+        self.assertEqual(args.null, "cross_section_shuffle")
+        self.assertFalse(args.compare_nulls)
 
 
 if __name__ == "__main__":

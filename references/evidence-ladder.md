@@ -1,6 +1,6 @@
 # Evidence Ladder · 证据分级与红旗
 
-> 蒸馏自 serenity-skill `references/evidence-ladder.md`，整合现有信号优先级体系。用于在研究过程中对所有证据源做标准化分级。
+> 参考 serenity-skill `references/evidence-ladder.md`，整合现有信号优先级体系。用于在研究过程中对所有证据源做标准化分级。
 
 ## 证据等级
 

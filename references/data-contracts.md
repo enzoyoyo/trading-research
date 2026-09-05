@@ -801,7 +801,7 @@ Readiness 不替代 L0-L5，只作为 Decision Compiler 的 `data_quality/resear
 
 ## ResearchProvenanceBundle（v2.39）
 
-外部原文、方法论蒸馏和言行交叉验证必须使用 `research_provenance.v1`，详细 schema、版权边界、错误码与 Memory admission 见 `source-grounded-research-provenance.md`。
+外部原文、方法论方法研究和言行交叉验证必须使用 `research_provenance.v1`，详细 schema、版权边界、错误码与 Memory admission 见 `source-grounded-research-provenance.md`。
 
 ```json
 {

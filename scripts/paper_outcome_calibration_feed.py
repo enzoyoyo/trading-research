@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
+from datetime import datetime, timezone
 import os
 import sqlite3
 import tempfile
@@ -130,40 +132,83 @@ def to_float(value: Any) -> float | None:
         return None
 
 
-def prediction_from(obj: Any) -> tuple[float | None, str | None]:
-    """Find explicit probability fields only; do not map text confidence."""
-    paths = [
-        ("factors.estimated_win_rate", ["factors", "estimated_win_rate"]),
-        ("estimated_win_rate", ["estimated_win_rate"]),
-        ("predicted_probability", ["predicted_probability"]),
-        ("predicted_p", ["predicted_p"]),
-        ("win_rate_proxy", ["win_rate_proxy"]),
-        ("decision_fusion.win_rate_proxy", ["decision_fusion", "win_rate_proxy"]),
-        ("metadata.decision_fusion.win_rate_proxy", ["metadata", "decision_fusion", "win_rate_proxy"]),
-    ]
-    for label, path in paths:
-        cur = obj
-        for key in path:
-            if not isinstance(cur, dict):
-                cur = None
-                break
-            cur = cur.get(key)
-        val = to_float(cur)
-        if val is not None and 0.0 <= val <= 1.0:
-            return val, label
-    if isinstance(obj, dict):
-        for value in obj.values():
-            if isinstance(value, dict):
-                found, source = prediction_from(value)
-                if found is not None:
-                    return found, source
-            elif isinstance(value, list):
-                for item in value[:20]:
-                    found, source = prediction_from(item)
-                    if found is not None:
-                        return found, source
-    return None, None
+CONTRACT_FIELD = "paper_prediction_contract"
+CONTRACT_TARGET = "net_pnl_positive"
 
+
+def clock_value(value: Any) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed.astimezone(timezone.utc) if parsed.tzinfo else None
+    except (ValueError, TypeError):
+        return None
+
+
+def validate_prediction_contract(entry: Any) -> tuple[dict[str, Any] | None, str]:
+    """Only an explicitly frozen entry contract is evidence; never recurse.
+
+    Proposal files and exit commentary are mutable after entry and cannot
+    retroactively create a prediction. The entry journal is the freeze boundary.
+    """
+    if not isinstance(entry, dict):
+        return None, "missing_prediction_contract"
+    contract = entry.get(CONTRACT_FIELD)
+    if not isinstance(contract, dict):
+        label = json.dumps(entry, default=str)
+        return None, "legacy_score_proxy" if "win_rate_proxy" in label else "missing_prediction_contract"
+    required = ("prediction_id", "proposal_id", "symbol", "strategy_version", "model_version", "basis")
+    if contract.get("schema_version") != 1 or any(not isinstance(contract.get(k), str) or not contract[k].strip() for k in required):
+        return None, "invalid_contract_identity"
+    if contract["proposal_id"] != entry.get("proposal_id") or contract["symbol"].upper() != str(entry.get("symbol") or "").upper():
+        return None, "contract_entry_identity_mismatch"
+    probability = contract.get("p")
+    if isinstance(probability, bool) or not isinstance(probability, (int, float)) or not math.isfinite(probability) or not 0 < probability < 1:
+        return None, "invalid_contract_probability"
+    as_of, frozen, opened = (clock_value(contract.get("as_of")), clock_value(contract.get("frozen_at")), clock_value(entry.get("timestamp_utc")))
+    if not all((as_of, frozen, opened)) or not as_of <= frozen <= opened <= datetime.now(timezone.utc):
+        return None, "invalid_contract_clock"
+    if contract.get("horizon_id") not in {"intraday", "overnight_cto", "swing_days", "position_months", "theme_years"}:
+        return None, "invalid_contract_horizon"
+    if contract.get("target") != CONTRACT_TARGET or contract.get("settlement") != "full_lifecycle":
+        return None, "contract_target_mismatch"
+    refs = contract.get("evidence_refs")
+    if not isinstance(refs, list) or not refs or any(not isinstance(ref, str) or not ref.strip() for ref in refs):
+        return None, "missing_contract_evidence"
+    if contract.get("probability_kind") != "ex_ante_forecast" or any(marker in json.dumps(contract).lower() for marker in ("win_rate_proxy", "legacy_score_proxy")):
+        return None, "unverified_probability_basis"
+    return contract, "eligible"
+
+
+def prediction_from(obj: Any) -> tuple[float | None, str | None]:
+    contract, _reason = validate_prediction_contract(obj)
+    return (float(contract["p"]), CONTRACT_FIELD) if contract else (None, None)
+
+
+def net_lifecycle_outcome(trade: dict[str, Any], outcomes: list[dict[str, Any]]) -> tuple[int | None, list[dict[str, Any]]]:
+    """Require explicit net cash P/L and cost provenance for every allocated fill.
+
+    Gross R/return and success labels cannot settle a net target. A fill allocated
+    across lifecycles is rejected until System A supplies per-lifecycle net P/L.
+    """
+    receipts = []
+    currencies = set()
+    for exit_row in trade.get("exits") or []:
+        matches = [row for row in outcomes if row.get("proposal_id") == exit_row.get("proposal_id") and row.get("timestamp_utc") == exit_row.get("timestamp_utc") and str(row.get("symbol") or "").upper() == trade.get("symbol") and row.get("status") in {"closed", "partial_closed"}]
+        if len(matches) != 1:
+            return None, []
+        row = lifecycle_module().settled_cost_row(matches[0], trade, outcomes)
+        net = row.get("net_pnl")
+        refs = row.get("cost_evidence_refs")
+        if isinstance(net, bool) or not isinstance(net, (int, float)) or not math.isfinite(net) or row.get("costs_included") is not True or not isinstance(refs, list) or not refs or any(not isinstance(r, str) or not r.strip() for r in refs):
+            return None, []
+        currency = row.get("net_pnl_currency")
+        if not isinstance(currency, str) or not currency.strip() or to_float(row.get("quantity")) != to_float(exit_row.get("quantity")):
+            return None, []
+        currencies.add(currency)
+        receipts.append(row)
+    if not receipts or len(currencies) != 1:
+        return None, []
+    return int(sum(row["net_pnl"] for row in receipts) > 0), receipts
 
 
 def read_json_file(path: Path) -> Any | None:
@@ -184,53 +229,22 @@ def iter_dicts(obj: Any):
 
 
 def build_prediction_index(paper_root: Path) -> tuple[dict[str, dict[str, Any]], Counter]:
-    """Index explicit proposal probabilities from System A artifacts.
+    """Mutable proposal files are not a point-in-time prediction registry.
 
-    This scans proposal/decision packet JSON files only. It never infers from
-    text labels like confidence=medium_high; it only accepts numeric probability
-    fields such as metadata.decision_fusion.win_rate_proxy.
+    Kept as a compatibility boundary for callers. Only contracts embedded in
+    actual entry journal rows can supply forecasts to this feed.
     """
-    index: dict[str, dict[str, Any]] = {}
-    stats: Counter = Counter()
-    for sub in ("proposals", "decision_packets"):
-        base = paper_root / sub
-        if not base.exists():
-            continue
-        for path in base.rglob("*.json"):
-            obj = read_json_file(path)
-            if obj is None:
-                stats[f"{sub}_json_unreadable"] += 1
-                continue
-            for d in iter_dicts(obj):
-                pred, field = prediction_from(d)
-                if pred is None:
-                    continue
-                ids = [d.get("id"), d.get("proposal_id")]
-                # LongBridge executor rows often wrap the proposal under `proposal`.
-                prop = d.get("proposal") if isinstance(d.get("proposal"), dict) else None
-                if prop:
-                    ids.extend([prop.get("id"), prop.get("proposal_id")])
-                for raw in ids:
-                    if not raw:
-                        continue
-                    key = str(raw)
-                    index.setdefault(key, {"predicted_p": pred, "prediction_field": field, "source_file": str(path.relative_to(paper_root))})
-                    stats["indexed_predictions"] += 1
-    stats["unique_prediction_ids"] = len(index)
-    return index, stats
+    del paper_root
+    return {}, Counter({"unique_prediction_ids": 0, "mutable_artifact_backfill_disabled": 1})
 
 
 def lookup_prediction(row: dict[str, Any], index: dict[str, dict[str, Any]]) -> tuple[float | None, str | None, dict[str, Any] | None]:
-    pred, field = prediction_from(row)
-    if pred is not None:
-        return pred, field, None
-    for raw in (row.get("proposal_id"), row.get("id"), row.get("order_id")):
-        if not raw:
-            continue
-        hit = index.get(str(raw))
-        if hit:
-            return float(hit["predicted_p"]), str(hit["prediction_field"]), hit
-    return None, None, None
+    # Never backfill an entry from later mutable proposal/decision artifacts.
+    del index
+    contract, reason = validate_prediction_contract(row)
+    if contract:
+        return float(contract["p"]), CONTRACT_FIELD, {"contract": contract, "eligibility": reason}
+    return None, None, {"eligibility": reason}
 
 
 def outcome_label(row: dict[str, Any]) -> int | None:
@@ -260,18 +274,14 @@ def pair_samples(
     skipped["unmatched_exit"] = int(aggregation.get("unmatched_exit_count") or 0)
 
     for trade in aggregation.get("complete_lifecycles") or []:
-        actual = outcome_label(trade)
-        if actual is None:
-            skipped["no_actual_outcome"] += 1
-            continue
         entry_payload = trade.get("entry_payload") if isinstance(trade.get("entry_payload"), dict) else {}
         predicted, field, pred_meta = lookup_prediction(entry_payload, prediction_index)
         if predicted is None:
-            predicted, field, pred_meta = lookup_prediction(
-                {"proposal_id": trade.get("entry_proposal_id")}, prediction_index
-            )
-        if predicted is None:
-            skipped["no_prediction_field"] += 1
+            skipped[(pred_meta or {}).get("eligibility", "missing_prediction_contract")] += 1
+            continue
+        actual, net_receipts = net_lifecycle_outcome(trade, outcomes)
+        if actual is None:
+            skipped["missing_verified_net_outcome"] += 1
             continue
         trade_lifecycle_id = str(trade.get("trade_lifecycle_id"))
         samples.append(
@@ -289,6 +299,8 @@ def pair_samples(
                     "entry": entry_payload,
                     "exits": trade.get("exits") or [],
                     "aggregate_r_multiple": trade.get("r_multiple"),
+                    "net_outcome_receipts": net_receipts,
+                    "horizon_id": pred_meta["contract"]["horizon_id"],
                     "prediction_meta": pred_meta,
                 },
             }
@@ -299,10 +311,6 @@ def pair_samples(
             continue
         entry_payload = trade.get("entry_payload") if isinstance(trade.get("entry_payload"), dict) else {}
         predicted, _field, _meta = lookup_prediction(entry_payload, prediction_index)
-        if predicted is None:
-            predicted, _field, _meta = lookup_prediction(
-                {"proposal_id": trade.get("entry_proposal_id")}, prediction_index
-            )
         if predicted is not None:
             skipped["open_not_closed_yet"] += 1
     return samples, skipped
@@ -324,10 +332,6 @@ def collect_pending_predictions(
             continue
         entry_payload = trade.get("entry_payload") if isinstance(trade.get("entry_payload"), dict) else {}
         pred, field, meta = lookup_prediction(entry_payload, prediction_index)
-        if pred is None:
-            pred, field, meta = lookup_prediction(
-                {"proposal_id": trade.get("entry_proposal_id")}, prediction_index
-            )
         proposal_ref = str(trade.get("entry_proposal_id") or "")
         trade_lifecycle_id = str(trade.get("trade_lifecycle_id") or "")
         if pred is None or not proposal_ref or not trade_lifecycle_id:
@@ -426,6 +430,8 @@ def ensure_pending_table(conn: sqlite3.Connection) -> None:
     # 2026-07-26 P0 repair: orphaned = the position backing this pending
     # prediction is gone from the latest broker snapshot but no fill evidence
     # ever closed the lifecycle. Additive columns, defaulted for old rows.
+    if "settled" not in columns:
+        conn.execute(f"ALTER TABLE {PENDING_TABLE} ADD COLUMN settled INTEGER NOT NULL DEFAULT 0")
     if "orphaned" not in columns:
         conn.execute(f"ALTER TABLE {PENDING_TABLE} ADD COLUMN orphaned INTEGER NOT NULL DEFAULT 0")
     if "orphaned_at" not in columns:
@@ -450,19 +456,17 @@ def write_pending_predictions(
     existing_refs = {
         str(row[0]) for row in conn.execute(f"SELECT proposal_ref FROM {PENDING_TABLE}").fetchall()
     }
+    # Preserve all historical payloads. Settlement/orphan flags are additive;
+    # invalid legacy rows remain available for read-time exclusion and audit.
     stale_refs = existing_refs - active_refs
-    if stale_refs:
-        conn.executemany(
-            f"DELETE FROM {PENDING_TABLE} WHERE proposal_ref=?",
-            [(ref,) for ref in sorted(stale_refs)],
-        )
+    conn.executemany(f"UPDATE {PENDING_TABLE} SET settled=1 WHERE proposal_ref=?", [(ref,) for ref in closed_refs])
     upserted = 0
     for row in pending:
         if row["proposal_ref"] in closed_refs:
             continue
         is_orphaned = row["proposal_ref"] in orphaned_refs
         conn.execute(
-            f"""INSERT OR REPLACE INTO {PENDING_TABLE} (
+            f"""INSERT OR IGNORE INTO {PENDING_TABLE} (
                 proposal_ref, trade_lifecycle_id, symbol, predicted_p,
                 prediction_field, opened_at, source_file, recorded_at,
                 source_payload_json, orphaned, orphaned_at, orphaned_reason
@@ -482,13 +486,15 @@ def write_pending_predictions(
                 ORPHAN_REASON_POSITION_GONE if is_orphaned else None,
             ),
         )
+        conn.execute(f"UPDATE {PENDING_TABLE} SET orphaned=?, orphaned_at=?, orphaned_reason=? WHERE proposal_ref=? AND settled=0", (int(is_orphaned), now_iso() if is_orphaned else None, ORPHAN_REASON_POSITION_GONE if is_orphaned else None, row["proposal_ref"]))
         upserted += 1
     total = conn.execute(f"SELECT count(*) FROM {PENDING_TABLE}").fetchone()[0]
     orphaned_total = conn.execute(f"SELECT count(*) FROM {PENDING_TABLE} WHERE orphaned=1").fetchone()[0]
     conn.commit()
     return {
         "pending_upserted": upserted,
-        "pending_removed": len(stale_refs),
+        "pending_removed": 0,
+        "historical_pending_preserved": len(stale_refs),
         "pending_table_total": int(total),
         "orphaned_predictions": int(orphaned_total),
     }
@@ -501,6 +507,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     prediction_index, index_stats = build_prediction_index(paper_root)
     samples, skipped = pair_samples(outcomes, orders, prediction_index)
     pending = collect_pending_predictions(outcomes, orders, prediction_index)
+    eligibility_counts: Counter = Counter()
+    for trade in lifecycle_module().aggregate_lifecycles(outcomes).get("lifecycles") or []:
+        _contract, reason = validate_prediction_contract(trade.get("entry_payload"))
+        eligibility_counts[reason] += 1
 
     snapshots_arg = getattr(args, "snapshots", None)
     snapshots_path = Path(snapshots_arg).expanduser() if snapshots_arg else (paper_root / "journal" / "paper_position_snapshots.jsonl")
@@ -569,6 +579,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "orders_scanned": len(orders),
         "prediction_index": dict(index_stats),
         "paired_samples": len(samples),
+        "eligible_samples": len(samples),
+        "legacy_score_proxy_lifecycles": eligibility_counts["legacy_score_proxy"],
+        "prediction_contract_eligibility": dict(eligibility_counts),
         "would_write_samples": len(samples),
         "inserted_count": inserted,
         "existing_count": existing,
@@ -592,8 +605,8 @@ def self_test() -> dict[str, Any]:
         outcomes = root / "paper_outcomes.jsonl"
         orders = root / "paper_orders.jsonl"
         outcomes.write_text("\n".join([
-            json.dumps({"status": "open", "symbol": "ABC.US", "side": "Buy", "proposal_id": "open-1", "timestamp_utc": "2026-01-01T10:00:00Z", "decision_fusion": {"win_rate_proxy": 0.62}}),
-            json.dumps({"status": "closed", "symbol": "ABC.US", "side": "Sell", "proposal_id": "exit-1", "timestamp_utc": "2026-01-03T10:00:00Z", "r_multiple": "1.20"}),
+            json.dumps({"status": "open", "quantity": 10, "symbol": "ABC.US", "side": "Buy", "proposal_id": "open-1", "timestamp_utc": "2026-01-01T10:00:00Z", "paper_prediction_contract": {"schema_version": 1, "prediction_id": "synthetic-open-1", "proposal_id": "open-1", "symbol": "ABC.US", "p": 0.62, "as_of": "2026-01-01T10:00:00Z", "frozen_at": "2026-01-01T10:00:00Z", "horizon_id": "swing_days", "target": "net_pnl_positive", "settlement": "full_lifecycle", "strategy_version": "synthetic-v1", "model_version": "synthetic-model-v1", "basis": "Synthetic pre-entry forecast fixture, not live evidence", "evidence_refs": ["fixture:prior-training-set"], "probability_kind": "ex_ante_forecast"}}),
+            json.dumps({"status": "closed", "quantity": 10, "net_pnl": 10, "net_pnl_currency": "USD", "costs_included": True, "cost_evidence_refs": ["fixture:broker-fees"], "symbol": "ABC.US", "side": "Sell", "proposal_id": "exit-1", "timestamp_utc": "2026-01-03T10:00:00Z", "r_multiple": "1.20"}),
         ]) + "\n", encoding="utf-8")
         orders.write_text("", encoding="utf-8")
         db = root / "memory.sqlite"

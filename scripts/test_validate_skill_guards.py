@@ -93,6 +93,111 @@ class MulticaCollaborationContractTests(unittest.TestCase):
         self.assertTrue(expected.issubset(set(errors)), errors)
 
 
+class DailyJournalWindowContractTests(unittest.TestCase):
+    RUNTIME_DEFAULT_10 = """import argparse
+ap = argparse.ArgumentParser()
+ap.add_argument("--days", type=int, default=10)
+"""
+    REFERENCE_DAYS_10 = """## Daily Journal
+- `python3 scripts/daily_journal.py --compose --days 10 --publish`
+- 幂等重组最近 10 个交易日。
+"""
+
+    def test_reference_and_runtime_agree_on_ten_day_window(self) -> None:
+        self.assertEqual(
+            validate_skill.daily_journal_window_contract_errors(
+                self.REFERENCE_DAYS_10,
+                self.RUNTIME_DEFAULT_10,
+            ),
+            [],
+        )
+
+    def test_stale_three_day_reference_is_rejected(self) -> None:
+        stale_reference = self.REFERENCE_DAYS_10.replace("--days 10", "--days 3").replace(
+            "最近 10 个交易日", "最近 3 个交易日"
+        )
+        errors = validate_skill.daily_journal_window_contract_errors(
+            stale_reference,
+            self.RUNTIME_DEFAULT_10,
+        )
+        self.assertIn("daily journal reference must prescribe --days 10", errors)
+
+    def test_runtime_default_other_than_ten_is_rejected(self) -> None:
+        runtime_default_3 = self.RUNTIME_DEFAULT_10.replace("default=10", "default=3")
+        errors = validate_skill.daily_journal_window_contract_errors(
+            self.REFERENCE_DAYS_10,
+            runtime_default_3,
+        )
+        self.assertIn("daily journal runtime --days default must be 10", errors)
+
+
+class MethodModuleContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.root = Path(__file__).resolve().parents[1]
+        cls.decision_text = (cls.root / "references" / "decision-compiler.md").read_text(encoding="utf-8")
+        cls.method_source = (cls.root / "scripts" / "method_router.py").read_text(encoding="utf-8")
+        cls.compiler_source = (cls.root / "scripts" / "decision_compiler.py").read_text(encoding="utf-8")
+
+    def test_all_runtime_methods_map_only_to_registered_modules(self) -> None:
+        self.assertEqual(
+            validate_skill.method_module_mapping_errors(
+                self.decision_text, self.method_source, self.compiler_source
+            ),
+            [],
+        )
+
+    def test_missing_method_row_is_rejected(self) -> None:
+        broken = self.decision_text.replace(
+            "| `counter_consensus` | `endogenous_structure` | 使用 `counter_consensus_thesis` 子框架与 Cap 行 |\n",
+            "",
+        )
+        errors = validate_skill.method_module_mapping_errors(
+            broken, self.method_source, self.compiler_source
+        )
+        self.assertIn("method mapping missing: counter_consensus", errors)
+
+    def test_unregistered_module_is_rejected(self) -> None:
+        broken = self.decision_text.replace(
+            "| `factor` | `quant_robustness` |",
+            "| `factor` | `invented_module` |",
+        )
+        errors = validate_skill.method_module_mapping_errors(
+            broken, self.method_source, self.compiler_source
+        )
+        self.assertIn("method mapping uses unregistered module for factor: invented_module", errors)
+
+    def test_overlay_allowlist_headers_and_table_agree(self) -> None:
+        self.assertEqual(
+            validate_skill.overlay_module_contract_errors(
+                self.decision_text, self.root / "references"
+            ),
+            [],
+        )
+
+    def test_overlay_declaration_after_line_eight_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            refs = Path(tmp)
+            for filename in validate_skill.OVERLAY_MODULE_CONTRACTS:
+                shutil.copy2(self.root / "references" / filename, refs / filename)
+            target = refs / "semis-index-divergence-overlay.md"
+            target.write_text("\n" * 8 + target.read_text(encoding="utf-8"), encoding="utf-8")
+            errors = validate_skill.overlay_module_contract_errors(self.decision_text, refs)
+        self.assertTrue(any("semis-index-divergence-overlay.md must declare" in error for error in errors), errors)
+
+    def test_overlay_cannot_declare_two_primary_modules(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            refs = Path(tmp)
+            for filename in validate_skill.OVERLAY_MODULE_CONTRACTS:
+                shutil.copy2(self.root / "references" / filename, refs / filename)
+            target = refs / "semis-index-divergence-overlay.md"
+            lines = target.read_text(encoding="utf-8").splitlines()
+            lines.insert(3, "> 主落点声明：编译进 `macro`。")
+            target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            errors = validate_skill.overlay_module_contract_errors(self.decision_text, refs)
+        self.assertTrue(any("semis-index-divergence-overlay.md must declare" in error for error in errors), errors)
+
+
 class ReleaseValidationIsolationTests(unittest.TestCase):
     def test_relocated_candidate_uses_trusted_account_home_for_live_path_sandbox(self) -> None:
         source = Path(__file__).resolve().parent / "release_validation_runner.py"

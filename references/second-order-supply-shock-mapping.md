@@ -1,6 +1,8 @@
 # Second-Order Supply Shock Mapping · 二阶供给冲击映射
 
-> 来源边界：蒸馏自 Frank（@Franktradinglog）2026-07-01 Meta 算力长帖、2026-07-01 NeoCloud 分层帖、2026-07-01 MU 缺口纪律帖、2026-07-02 执行帖，Balder 2026-07-01 云分化帖。文中 Meta/CRWV/NBIS/APLD/IREN/MU 等是 **2026-07 实例，禁止照抄**；机制可迁移、名单须按当期事实重画。
+> 主落点声明：编译进 `endogenous_structure`；合同与资产代际事实仍按下文进入 `fundamentals`。
+
+> 来源边界：参考 Frank（@Franktradinglog）2026-07-01 Meta 算力长帖、2026-07-01 NeoCloud 分层帖、2026-07-01 MU 缺口纪律帖、2026-07-02 执行帖，Balder 2026-07-01 云分化帖。文中 Meta/CRWV/NBIS/APLD/IREN/MU 等是 **2026-07 实例，禁止照抄**；机制可迁移、名单须按当期事实重画。
 
 ## 定位
 

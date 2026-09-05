@@ -43,6 +43,55 @@ def fresh_signal(module: str, level: str, *, multiplier: float = 1.0, **extra):
 
 
 class DecisionCompilerV2Tests(unittest.TestCase):
+    def test_same_module_uses_min_while_cross_module_still_multiplies(self) -> None:
+        same_module = compiler.compile_payload({
+            "module_signals": [
+                {"module": "endogenous_structure", "sub_framework": name, "max_action_level": "L3", "position_multiplier": 0.7}
+                for name in ("overlay_a", "overlay_b", "overlay_c")
+            ],
+        })
+        self.assertTrue(same_module["ok"])
+        self.assertEqual(same_module["final_position_multiplier"], 0.7)
+        superseded = [
+            row for row in same_module["cap_applied"]
+            if row.get("superseded_by_min")
+        ]
+        self.assertEqual(len(superseded), 2)
+        self.assertTrue(all(row["capped_to"] == 0.7 for row in superseded))
+
+        cross_module = compiler.compile_payload({
+            "module_signals": [
+                {"module": "endogenous_structure", "max_action_level": "L3", "position_multiplier": 0.7},
+                {"module": "macro", "max_action_level": "L3", "position_multiplier": 0.7},
+            ],
+        })
+        self.assertTrue(cross_module["ok"])
+        self.assertEqual(cross_module["final_position_multiplier"], 0.49)
+        self.assertFalse(any(row.get("superseded_by_min") for row in cross_module["cap_applied"]))
+
+    def test_strict_v2_same_module_sub_frameworks_use_one_module_min(self) -> None:
+        result = compiler.compile_payload({
+            "schema_version": "decision_request.v2",
+            "decision_context": {
+                **REGISTERED_CONTEXT,
+                "required_modules": [
+                    "endogenous_structure", "risk_regime", "portfolio_risk_budget", "data_quality",
+                ],
+            },
+            "module_signals": [
+                fresh_signal("endogenous_structure", "L3", multiplier=0.7, sub_framework=name)
+                for name in ("overlay_a", "overlay_b", "overlay_c")
+            ] + [
+                fresh_signal("risk_regime", "L3"),
+                fresh_signal("portfolio_risk_budget", "L3"),
+                fresh_signal("data_quality", "L3"),
+            ],
+        }, now=TEST_NOW)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["contract_status"], "strict_pass")
+        self.assertEqual(result["final_position_multiplier"], 0.7)
+        self.assertEqual(sum(bool(row.get("superseded_by_min")) for row in result["cap_applied"]), 2)
+
     def test_l5_exit_dominates_l3_add(self) -> None:
         result = compiler.compile_payload({
             "module_signals": [
@@ -555,7 +604,7 @@ class DecisionCompilerV2Tests(unittest.TestCase):
 
 class CapAndTightenOnlyRegistryTests(unittest.TestCase):
     """Cap & Tighten-Only Registry runtime enforcement (decision-compiler.md
-    lines 62-78 are the single authority for the values). These cover the two
+    lines 62-79 are the single authority for the values). These cover the two
     audit-confirmed bypasses (finding cap-registry-unenforced) plus one
     adversarial case per invariant category: (1) claim/module-type position_
     multiplier hard cap, (2) tighten-only overlay behaviour (never loosens, never
@@ -583,9 +632,10 @@ class CapAndTightenOnlyRegistryTests(unittest.TestCase):
         paired_refs.extend([
             ("hk_deep_value_no_catalyst", compiler.HK_DEEP_VALUE_DOC_REF),
             ("hk_momentum_drawdown_review", compiler.HK_MOMENTUM_REVIEW_DOC_REF),
+            ("counter_consensus_thesis", compiler.COUNTER_CONSENSUS_DOC_REF),
         ])
 
-        self.assertEqual(len(paired_refs), 12)
+        self.assertEqual(len(paired_refs), 14)
         for identifier, doc_ref in paired_refs:
             with self.subTest(identifier=identifier, doc_ref=doc_ref):
                 self.assertIn(identifier, referenced_line(doc_ref))
@@ -662,6 +712,71 @@ class CapAndTightenOnlyRegistryTests(unittest.TestCase):
         self.assertEqual(cap_entry["requested"], 0.9)
         self.assertEqual(cap_entry["capped_to"], 0.15)
         self.assertEqual(cap_entry["field"], "position_multiplier")
+
+    def test_counter_consensus_caps_multiplier_and_missing_contract_to_watch(self) -> None:
+        result = compiler.compile_payload({
+            "module_signals": [{
+                "module": "endogenous_structure",
+                "sub_framework": "counter_consensus_thesis",
+                "max_action_level": "L3",
+                "position_multiplier": 0.8,
+            }],
+        })
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["final_position_multiplier"], 0.3)
+        self.assertEqual(result["entry_permission"], "WATCH")
+        multiplier_cap = next(
+            row for row in result["cap_applied"]
+            if row["field"] == "position_multiplier"
+        )
+        self.assertEqual(multiplier_cap["requested"], 0.8)
+        self.assertEqual(multiplier_cap["capped_to"], 0.3)
+        watch_cap = next(
+            row for row in result["cap_applied"]
+            if row["field"] == "entry_permission"
+        )
+        self.assertEqual(watch_cap["missing_fields"], ["falsifier", "time_stop"])
+
+    def test_counter_consensus_complete_contract_keeps_entry_but_not_multiplier_excess(self) -> None:
+        result = compiler.compile_payload({
+            "module_signals": [{
+                "module": "endogenous_structure",
+                "sub_framework": "counter_consensus_thesis",
+                "max_action_level": "L3",
+                "position_multiplier": 0.8,
+                "falsifier": "variant evidence fails",
+                "time_stop": "2026-09-30T16:00:00-04:00",
+            }],
+        })
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["final_position_multiplier"], 0.3)
+        self.assertEqual(result["entry_permission"], "ADD")
+
+    def test_strict_counter_consensus_missing_text_contract_is_watch_only(self) -> None:
+        result = compiler.compile_payload({
+            "schema_version": "decision_request.v2",
+            "decision_context": {
+                **REGISTERED_CONTEXT,
+                "required_modules": [
+                    "endogenous_structure", "risk_regime", "portfolio_risk_budget", "data_quality",
+                ],
+            },
+            "module_signals": [
+                fresh_signal(
+                    "endogenous_structure", "L3", multiplier=0.8,
+                    sub_framework="counter_consensus_thesis",
+                    falsifier=True,
+                    time_stop={},
+                ),
+                fresh_signal("risk_regime", "L3"),
+                fresh_signal("portfolio_risk_budget", "L3"),
+                fresh_signal("data_quality", "L3"),
+            ],
+        }, now=TEST_NOW)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["contract_status"], "strict_pass")
+        self.assertEqual(result["entry_permission"], "WATCH")
+        self.assertEqual(result["final_position_multiplier"], 0.3)
 
     def test_political_disclosure_sub_framework_caps_tighter_than_generic_x_frontline(self) -> None:
         # political_disclosure vote is a stricter

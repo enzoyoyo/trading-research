@@ -19,6 +19,9 @@ data_sources:
   longbridge:
     enabled: false
     bin_env: LONGBRIDGE_BIN
+  financial_api:
+    enabled: false
+    key_env: FINANCIAL_API_KEY
   akshare:
     enabled: true
     python_env: AKSHARE_PYTHON

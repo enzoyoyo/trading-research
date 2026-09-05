@@ -11,15 +11,18 @@ outside the skill directory.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import pathlib
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 DEFAULT_LEDGER = (
     pathlib.Path.home() / ".hermes" / "work" / "trading-research-autoevolve" / "ledger.jsonl"
 )
+LEDGER_GAP_WINDOW_DAYS = 10
+LEDGER_GAP_MIN_CONSECUTIVE_DAYS = 2
 
 
 def ledger_path() -> pathlib.Path:
@@ -69,6 +72,7 @@ def derive_from_check(doc: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "performance_materiality": perf.get("performance_materiality"),
+        "paper_learning_consumption": perf.get("paper_learning_consumption"),
         "eval_pass_count": eval_suite.get("passed"),
         "eval_total": eval_suite.get("total"),
         "eval_regressions": eval_cmp.get("regressions") or [],
@@ -107,6 +111,7 @@ def build_row(args: argparse.Namespace) -> dict[str, Any]:
         "status": args.status or "unknown",
         "materiality": args.materiality or "none",
         "performance_materiality": derived.get("performance_materiality"),
+        "paper_learning_consumption": derived.get("paper_learning_consumption"),
         "eval_pass_count": derived.get("eval_pass_count"),
         "eval_total": derived.get("eval_total"),
         "eval_regressions": derived.get("eval_regressions") or [],
@@ -122,8 +127,18 @@ def cmd_append(args: argparse.Namespace) -> int:
     row = build_row(args)
     path = ledger_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Resolve novelty at append time too: repeating the same check JSON, even
+    # concurrently, cannot book its real lifecycles as a second evidence batch.
+    from paper_learning_consumer import read_history, rebase_for_append
     with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            row["paper_learning_consumption"] = rebase_for_append(
+                row.get("paper_learning_consumption"), read_history(path))
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+            fh.flush()
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
     print(json.dumps({"ok": True, "appended": row, "ledger": str(path)}, ensure_ascii=False, indent=2))
     return 0
 
@@ -138,8 +153,37 @@ def _tail_streak(rows: list[dict[str, Any]], predicate) -> int:
     return streak
 
 
-def health_report(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def trailing_missing_dates(
+    rows: list[dict[str, Any]],
+    today: date,
+    window_days: int = LEDGER_GAP_WINDOW_DAYS,
+) -> list[str]:
+    dates_present: set[date] = set()
+    for row in rows:
+        raw = row.get("date")
+        if not raw:
+            continue
+        try:
+            dates_present.add(date.fromisoformat(str(raw)))
+        except ValueError:
+            continue
+    if not dates_present:
+        return []
+
+    missing: list[str] = []
+    cursor = today - timedelta(days=1)
+    window_start = cursor - timedelta(days=window_days)
+    while cursor > window_start:
+        if cursor in dates_present:
+            break
+        missing.append(cursor.isoformat())
+        cursor -= timedelta(days=1)
+    return sorted(missing)
+
+
+def health_report(rows: list[dict[str, Any]], today: date | None = None) -> dict[str, Any]:
     issues: list[dict[str, Any]] = []
+    today = today or datetime.now().astimezone().date()
 
     def src(row: dict[str, Any], key: str) -> str:
         return (row.get("sources_checked") or {}).get(key, "unknown")
@@ -164,6 +208,17 @@ def health_report(rows: list[dict[str, Any]]) -> dict[str, Any]:
     counts = [r.get("eval_pass_count") for r in rows if isinstance(r.get("eval_pass_count"), int)]
     if len(counts) >= 2 and counts[-1] < counts[-2]:
         issues.append({"type": "eval_pass_count_drop", "from": counts[-2], "to": counts[-1]})
+
+    missing_dates = trailing_missing_dates(rows, today=today)
+    if len(missing_dates) >= LEDGER_GAP_MIN_CONSECUTIVE_DAYS:
+        issues.append(
+            {
+                "type": "ledger_missing_trailing_dates",
+                "consecutive_days": len(missing_dates),
+                "missing_dates": missing_dates,
+                "note": "date-sequence signal only; use self_optimization_check.py for read-only cron execution attribution",
+            }
+        )
 
     return {"ok": not issues, "issues": issues, "rows_scanned": len(rows)}
 

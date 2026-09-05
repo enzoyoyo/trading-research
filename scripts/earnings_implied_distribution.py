@@ -21,6 +21,7 @@ DEFAULT_MOVE_ROOT = (
     Path.home() / ".cache" / "hermes" / "trading-research"
     / "earnings-radar" / "moves"
 )
+# Legacy median adaptation; these cutoffs are not validated for this statistic.
 RICH_THRESHOLD = 1.25
 CHEAP_THRESHOLD = 0.95
 
@@ -56,12 +57,43 @@ def _mid(bid_value: Any, ask_value: Any) -> float | None:
     return mid if mid > 0 else None
 
 
+def _clock(value: Any, now: datetime) -> tuple[str | None, str]:
+    if value is None or value == "":
+        return None, "missing"
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return None, "invalid_clock"
+        if parsed > now:
+            return None, "future_clock"
+        return parsed.isoformat(), "reported_not_verified"
+    except (ValueError, TypeError, OverflowError):
+        return None, "invalid_clock"
+
+
+def _history_metadata(payload: dict[str, Any]) -> dict[str, Any]:
+    events = [row for row in payload.get("events", []) if isinstance(row, dict)
+              and _number(row.get("abs_move")) is not None]
+    return {
+        "sample_count": payload.get("sample_count"),
+        "window_dates": payload.get("window_dates") or ([{
+            "event_date": row.get("event_date"), "reaction_date": row.get("reaction_date")
+        } for row in events] or None),
+        "history_as_of": payload.get("history_as_of"),
+        # build_history v1 as_of is computation time, never a market-data clock.
+        "computed_at": payload.get("computed_at") or payload.get("as_of"),
+    }
+
+
 def resolve_hist_median(
     symbol: str,
     provided: float | None,
     *,
     move_root: Path | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> tuple[float | None, str, list[dict[str, Any]]]:
+    if metadata is not None:
+        metadata.clear()
     value = _number(provided)
     if provided is not None:
         if value is not None and value > 0:
@@ -77,7 +109,9 @@ def resolve_hist_median(
         payload = None
     cached = _number(payload.get("hist_median")) if isinstance(payload, dict) else None
     samples = payload.get("sample_count") if isinstance(payload, dict) else None
-    if cached is not None and cached > 0 and isinstance(samples, int) and samples >= 4:
+    if cached is not None and cached > 0 and isinstance(samples, int) and not isinstance(samples, bool) and samples >= 4:
+        if metadata is not None:
+            metadata.update(_history_metadata(payload))
         return cached, "earnings_move_history_cache", []
     return None, "unavailable", [{
         "gap": "historical_earnings_median_unavailable",
@@ -94,8 +128,11 @@ def calculate_distribution(
     hist_median: float | None = None,
     hist_median_source: str = "caller_provided",
     observed_on: str | None = None,
+    hist_metadata: dict[str, Any] | None = None,
+    latest_known_earnings_date: str | None = None,
     extra_gaps: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    computed_at = datetime.now(timezone.utc)
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     options = data.get("options") if isinstance(data.get("options"), list) else []
     spot = _number(data.get("current_price") or data.get("close"))
@@ -116,6 +153,54 @@ def calculate_distribution(
         })
 
     gaps = [dict(row) for row in (extra_gaps or [])]
+    quote_source = "payload.timestamp" if payload.get("timestamp") is not None else "data.timestamp"
+    quote_as_of, quote_status = _clock(payload.get("timestamp") if payload.get("timestamp") is not None
+                                       else data.get("timestamp"), computed_at)
+    if quote_status != "reported_not_verified":
+        gaps.append({"gap": "quote_clock_missing" if quote_status == "missing" else "quote_clock_invalid",
+                     "reason_code": quote_status})
+    meta = hist_metadata or {}
+    history_as_of, history_status = _clock(meta.get("history_as_of"), computed_at)
+    history_computed_at, computation_status = _clock(meta.get("computed_at"), computed_at)
+    history_invalid = any(state in ("invalid_clock", "future_clock")
+                          for state in (history_status, computation_status))
+    for field, state in (("history_as_of", history_status), ("computed_at", computation_status)):
+        if state != "reported_not_verified":
+            gaps.append({"gap": "historical_" + field + "_" + ("missing" if state == "missing" else "invalid"),
+                         "reason_code": state})
+    windows = meta.get("window_dates")
+    if windows is not None:
+        try:
+            if not isinstance(windows, list):
+                raise ValueError("invalid window")
+            for row in windows:
+                if not isinstance(row, dict):
+                    raise ValueError("invalid window row")
+                for field in ("event_date", "reaction_date"):
+                    if row.get(field) is not None and date.fromisoformat(row[field]) > computed_at.date():
+                        raise ValueError("future window")
+        except (ValueError, TypeError):
+            history_invalid = True
+            gaps.append({"gap": "historical_window_dates_invalid", "reason_code": "invalid_clock"})
+    latest_status = "unknown_latest_earnings_date"
+    if latest_known_earnings_date is not None:
+        try:
+            latest = date.fromisoformat(latest_known_earnings_date)
+            if latest > computed_at.date():
+                raise ValueError("future event")
+            dates = [date.fromisoformat(row["event_date"]) for row in (windows or [])
+                     if isinstance(row, dict) and row.get("event_date")]
+            if any(day > computed_at.date() for day in dates):
+                raise ValueError("future history")
+            latest_status = "reported_not_verified" if dates and max(dates) >= latest else "unknown_history_window"
+            if dates and max(dates) < latest:
+                latest_status = "hist_median_excludes_latest_print"
+                history_invalid = True
+                gaps.append({"gap": latest_status, "reason_code": "missing"})
+        except (ValueError, TypeError):
+            latest_status = "invalid_event_date"
+            history_invalid = True
+            gaps.append({"gap": latest_status, "reason_code": "invalid_clock"})
     available_expiries = sorted({row["expiry"] for row in rows})
     if expiry is not None:
         try:
@@ -162,7 +247,7 @@ def calculate_distribution(
     implied_move = None
     if spot is not None and spot > 0 and call_mid is not None and put_mid is not None:
         implied_move = (call_mid + put_mid) / spot
-    typical = _number(hist_median)
+    typical = None if history_invalid else _number(hist_median)
     ratio = implied_move / typical if implied_move is not None and typical is not None and typical > 0 else None
     label = None
     if ratio is not None:
@@ -174,13 +259,34 @@ def calculate_distribution(
             "impact": "implied_vs_typical_ratio and label are null",
         })
 
+    if ratio is not None:
+        gaps.extend([
+            {"gap": "median_ratio_thresholds_not_validated", "reason_code": "method_limit",
+             "impact": "RICH/CHEAP/FAIR are independent heuristic labels, not the documented mean-last-nine method"},
+            {"gap": "historical_median_sample_window_and_cutoff_not_verified", "reason_code": "method_limit",
+             "impact": "reported metadata is unaudited; missing fields remain null"},
+        ])
     critical_missing = implied_move is None
     status = "insufficient_data" if critical_missing else ("partial" if gaps else "ok")
     return {
         "schema_version": "earnings_implied_distribution.v1",
         "symbol": str(symbol).strip().upper().removesuffix(".US"),
         "status": status,
-        "as_of": str(payload.get("timestamp") or data.get("timestamp") or datetime.now(timezone.utc).isoformat()),
+        "as_of": quote_as_of,
+        "computed_at": computed_at.isoformat(),
+        "source_freshness": {
+            "status": "unknown_no_age_policy",
+            "clocks": {
+                "quote": {"as_of": quote_as_of, "source": quote_source if quote_as_of else None,
+                          "status": quote_status},
+                "history": {"as_of": history_as_of, "source": hist_median_source + ".history_as_of",
+                            "status": history_status},
+                "history_computation": {"as_of": history_computed_at,
+                                        "source": hist_median_source + ".computed_at_or_legacy_as_of",
+                                        "status": computation_status},
+            },
+            "latest_print_check": latest_status,
+        },
         "source": "cboe_delayed",
         "spot": spot,
         "expiry": selected_expiry,
@@ -196,7 +302,18 @@ def calculate_distribution(
         "implied_vs_typical_ratio": ratio,
         "relative_value_label": label,
         "relative_value_thresholds": {"RICH_gte": RICH_THRESHOLD, "CHEAP_lte": CHEAP_THRESHOLD},
-        "method_source": "balder_public_docs" if ratio is not None else None,
+        "method_source": "independent_unvalidated_median_adaptation" if ratio is not None else None,
+        "comparison_contract": {
+            "denominator_statistic": "median_absolute_session_aligned_reaction",
+            "documented_author_statistic": "mean_absolute_reaction_last_9_prints",
+            "author_formula_reproduced": False,
+            "threshold_validation": "unvalidated_for_median",
+            "label_authority": "descriptive_heuristic_only",
+            "sample_count": meta.get("sample_count"), "sample_window": windows,
+            "window_dates": windows, "history_as_of": history_as_of,
+            "historical_data_as_of": history_as_of,
+            "sample_metadata_status": "reported_not_verified" if meta else "not_verified_by_scalar_median_interface",
+        },
         "risk_neutral": True,
         "risk_neutral_density_computed": False,
         "is_direction_prediction": False,
@@ -212,34 +329,18 @@ def run_distribution(
     *,
     expiry: str | None = None,
     hist_median: float | None = None,
+    hist_metadata: dict[str, Any] | None = None,
+    latest_known_earnings_date: str | None = None,
 ) -> dict[str, Any]:
-    typical, typical_source, typical_gaps = resolve_hist_median(symbol, hist_median)
+    metadata: dict[str, Any] = {}
+    typical, typical_source, typical_gaps = resolve_hist_median(symbol, hist_median, metadata=metadata)
+    if hist_metadata is not None:
+        metadata = dict(hist_metadata)
     payload, fetch_gap = fetch_cboe_payload(symbol)
     if payload is None:
-        return {
-            "schema_version": "earnings_implied_distribution.v1",
-            "symbol": str(symbol).strip().upper().removesuffix(".US"),
-            "status": "insufficient_data",
-            "as_of": datetime.now(timezone.utc).isoformat(),
-            "source": "cboe_delayed",
-            "spot": None,
-            "expiry": expiry,
-            "atm_strike": None,
-            "atm_call_mid": None,
-            "atm_put_mid": None,
-            "implied_move_premium_pct": None,
-            "hist_median": typical,
-            "hist_median_source": typical_source,
-            "implied_vs_typical_ratio": None,
-            "relative_value_label": None,
-            "risk_neutral": True,
-            "risk_neutral_density_computed": False,
-            "is_direction_prediction": False,
-            "position_multiplier": 0.0,
-            "cannot_raise_upstream": True,
-            "data_gaps": [fetch_gap, *typical_gaps],
-            "no_order_execution": True,
-        }
+        payload = {}
+        if fetch_gap:
+            typical_gaps.append(fetch_gap)
     return calculate_distribution(
         symbol,
         payload,
@@ -247,6 +348,8 @@ def run_distribution(
         hist_median=typical,
         hist_median_source=typical_source,
         extra_gaps=typical_gaps,
+        hist_metadata=metadata,
+        latest_known_earnings_date=latest_known_earnings_date,
     )
 
 
@@ -269,6 +372,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--symbol", required=True, help="uppercase US ticker, for example MSFT")
     parser.add_argument("--expiry", help="explicit option expiry YYYY-MM-DD")
     parser.add_argument("--hist-median", type=float, help="caller-provided session-aligned historical median")
+    parser.add_argument("--latest-known-earnings-date", help="explicit known completed earnings date YYYY-MM-DD")
     parser.add_argument("--json", action="store_true", help="pretty-print JSON")
     return parser
 
@@ -281,7 +385,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     args = build_parser().parse_args(args_list)
     try:
-        result = run_distribution(args.symbol, expiry=args.expiry, hist_median=args.hist_median)
+        result = run_distribution(args.symbol, expiry=args.expiry, hist_median=args.hist_median,
+                                  latest_known_earnings_date=args.latest_known_earnings_date)
     except (OSError, ValueError) as exc:
         print(json.dumps({
             "ok": False,

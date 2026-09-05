@@ -355,6 +355,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_quote = sub.add_parser("quote")
     p_quote.add_argument("symbols", nargs="+")
+    p_quote.add_argument("--source", choices=["tencent", "financial_api"], default="tencent")
     p_quote.add_argument("--json", action="store_true")
 
     p_concept = sub.add_parser("concept")
@@ -378,7 +379,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "health":
             result = cmd_health(opener)
         elif args.command == "quote":
-            result = cmd_quote(opener, args.symbols)
+            if args.source == "financial_api":
+                from financial_api_bridge import fetch
+                # Explicit source selection retains the provider's missing quote
+                # timestamp; never launder observed_at into a real quote time.
+                result = fetch("quote", options={"symbols": args.symbols})
+            else:
+                result = cmd_quote(opener, args.symbols)
         elif args.command == "concept":
             result = cmd_concept(opener, args.symbol)
         elif args.command == "announcements":

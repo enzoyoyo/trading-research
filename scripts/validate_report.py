@@ -214,6 +214,23 @@ KOL_CLAUSE_BOUNDARIES = "\n。；;！？!?：:"
 MAX_MAIN_REPORT_LINES = 40
 MAX_CORE_CONCLUSION_NONEMPTY_LINES = 2
 MAX_NON_TABLE_EXPLANATION_BULLETS = 5
+NUMERIC_WIN_STAT_PATTERN = re.compile(
+    r"(?:胜率|准确率|命中率)\s*(?:[:：=为是达至约近]|达到)?\s*"
+    r"(?:\d+(?:\.\d+)?\s*%|\d+\s*/\s*\d+|0(?:\.\d+)?|1(?:\.0+)?)"
+    r"|\b(?:win[\s_-]*rate|accuracy|hit[\s_-]*rate)\b\s*"
+    r"(?:(?:is|was|of|about)\s+|[:=]\s*)?"
+    r"(?:\d+(?:\.\d+)?\s*%|\d+\s*/\s*\d+|0(?:\.\d+)?|1(?:\.0+)?)",
+    re.I,
+)
+EVALUATED_N_DISCLOSURE_PATTERN = re.compile(
+    r"\bevaluated_n\b\s*[:=]\s*\d+|\bn\s*=\s*\d+",
+    re.I,
+)
+ABSTENTION_RATE_DISCLOSURE_PATTERN = re.compile(
+    r"(?:弃权率|\babstention_rate\b)\s*[:：=]?\s*"
+    r"(?:\d+(?:\.\d+)?\s*%|0(?:\.\d+)?|1(?:\.0+)?)",
+    re.I,
+)
 
 
 def fail(msg: str) -> NoReturn:
@@ -860,6 +877,16 @@ def _validate_disclaimer_and_falsifier(text: str) -> None:
         warn("falsifier too vague — should be concrete observable condition")
 
 
+def _validate_numeric_win_stat_disclosure(text: str) -> None:
+    """Numeric win/accuracy claims require the evaluated and abstention denominators."""
+    if not NUMERIC_WIN_STAT_PATTERN.search(text):
+        return
+    if not EVALUATED_N_DISCLOSURE_PATTERN.search(text):
+        fail("numeric win-rate statement missing evaluated_n (or n=<evaluated>)")
+    if not ABSTENTION_RATE_DISCLOSURE_PATTERN.search(text):
+        fail("numeric win-rate statement missing abstention_rate (or 弃权率)")
+
+
 def validate(
     path: Path,
     provenance_bundle: Path | None = None,
@@ -909,6 +936,7 @@ def validate(
     levels: list[int] = []
     for safety_text in safety_representations:
         _validate_report_safety(safety_text)
+        _validate_numeric_win_stat_disclosure(safety_text)
         level = _validate_action_contract(safety_text, provenance_result)
         _validate_kol_report_contract(safety_text, level, provenance_result)
         levels.append(level)

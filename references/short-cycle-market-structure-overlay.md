@@ -1,5 +1,7 @@
 # Short-Cycle Market Structure Overlay
 
+> 主落点声明：编译进 `execution_window`；option 分支的 `gamma` / `data_quality` 只作次级收紧。
+
 ## Purpose
 
 This US-only layer answers **whether an already-selected direction is executable today**. It does not select direction, replace the multi-factor framework, or create a second action ladder.

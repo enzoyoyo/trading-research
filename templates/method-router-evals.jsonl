@@ -5,3 +5,5 @@
 {"args":{"market":"HK","horizon":"swing","theme":"腾讯 南向 流动性 政策"},"expect_scenario":"HK","must_weight_gte":{"macro_policy_news_account":18},"weights_sum":100}
 {"args":{"market":"US","horizon":"swing","theme":"pair trade crowding passive flow ipo lockup secondary bull gross margin","macro_policy":true},"expect_scenario":"US_flow_rotation","must_macro_policy_context":true,"must_weight_gte":{"endogenous_microstructure":20,"macro_policy_news_account":18},"weights_sum":100}
 {"args":{"market":"US","horizon":"swing","theme":"early-stage AI optical CPO supply chain pre-revenue emerging technology"},"expect_scenario":"US_early_theme","must_weight_gte":{"early_stage_quality":18,"supply_chain_xray":13},"weights_sum":100}
+{"args":{"market":"US","horizon":"swing","theme":"SOXX 半导体背离 SPY 反弹可信度"},"expect_scenario":"US_supply_chain","must_weight_gte":{"serenity":18,"supply_chain_xray":13},"weights_sum":100}
+{"args":{"market":"US","horizon":"swing","theme":"semis divergence risk 费城半导体 SMH vs QQQ"},"expect_scenario":"US_supply_chain","must_weight_gte":{"serenity":18,"supply_chain_xray":13},"weights_sum":100}

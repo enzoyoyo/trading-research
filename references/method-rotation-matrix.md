@@ -43,6 +43,7 @@
 - 内生市场结构/拥挤度：pair trade、consensus premium、passive flow、ETF 套利、IPO/lockup/secondary、#2>#1 补涨。
 - 宏观政策新闻/账户：用户要求结合实时新闻、政策、宏观、Longbridge、IBKR、持仓、仓位。
 - 美股杀杠杆/系统风险：只在真实去杠杆/强平语境触发——margin call、强平、爆仓、流动性踩踏/挤兑、basis trade unwind、系统性 deleveraging 词组（`scripts/method_router.py` `DELEVERAGING_KEYWORDS`）。VIX/GEX/Skew/黄金/个股代码（如 AAPL）等单独实体词或期权结构词**不触发**本场景，需与去杠杆语义共同出现才判定为系统性风险；否则按各自场景路由（个股→大科技/供应链等，期权结构→美股期权/Gamma主导）。
+- 实测风险态后置钩子：本次会话的 `risk_regime_snapshot.v1` 优先于 repo 外 `risk_regime/current.json` 缓存；仅当北京时间当日、未过 `stale_after` 且状态为 `active_deleveraging/forced_liquidation` 时，对 `youzi_emotion/early_stage_quality/a_share_short_term/livermore` 的**原始分**按 `US_deleveraging` 行逐项取 min，再统一 normalize。缺失、无效、未来或过期快照 fail-open 回基础矩阵；钩子只做 min，不做 max，输出 `risk_regime_hook.tightened_methods.{raw_before,raw_after}` 供审计。
 - 港股离岸市场结构 Overlay：港股场景（港股标的/恒科/南向/高股息港股/港股ETF）叠加 `hk-offshore-market-playbook.md` 作为市场结构 overlay（离岸身份第一性/资金阵营三分/流动性横截面分层/收益资产 vs 波动率资产），**不新增独立权重列**，只影响港股行的方法解释与收紧、不覆盖 `risk_regime`。详见 `hk-offshore-market-playbook.md`。
 
 ## 冲突裁决

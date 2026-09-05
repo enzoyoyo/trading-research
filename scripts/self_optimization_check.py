@@ -7,6 +7,7 @@ validators, but it does not edit files or execute trades.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -40,8 +41,8 @@ PENDING_CALIBRATION_TABLE = "calibration_pending_paper_predictions"
 _ORPHANED_FLAG_KEYS = ("orphaned", "is_orphaned")
 _ORPHANED_STATUS_KEYS = ("status", "reconciliation_status", "lifecycle_status")
 _ORPHANED_STATUS_VALUES = {"orphaned", "closed_unreconciled"}
-LEDGER_GAP_WINDOW_DAYS = 10  # trailing calendar days scanned for a missed-run gap
-LEDGER_GAP_MIN_CONSECUTIVE_DAYS = 2  # >=2 consecutive missing days before alerting
+SELF_OPT_CRON_JOB_ID = os.environ.get("TRADING_RESEARCH_SELF_OPT_CRON_JOB_ID", "").strip()
+DEFAULT_CRON_EXECUTIONS_DB = HOME / ".hermes" / "cron" / "executions.db"
 
 REFERENCE_REPOS = [
     "OpenBB-finance/OpenBB",
@@ -248,6 +249,16 @@ def run_json(cmd: list[str], timeout: int = 60) -> dict[str, Any]:
     return {**data, "_ok": True}
 
 
+def mechanism_learning_snapshot(value: Any) -> dict[str, Any]:
+    """Carry descriptive research separately; it never grants learning eligibility."""
+    boundary = {"action_authority": False, "materiality_eligible": False,
+                "changes_existing_learning_gates": False}
+    if not isinstance(value, dict) or value.get("schema_version") != "paper_mechanism_learning.v1":
+        return {"state": "unknown", "feedback": None,
+                "data_gaps": ["mechanism_learning_missing_or_invalid_schema"], **boundary}
+    return {**value, **boundary}
+
+
 def latest_learning_packet() -> dict[str, Any]:
     packet_dir = pathlib.Path(
         os.environ.get(
@@ -262,7 +273,8 @@ def latest_learning_packet() -> dict[str, Any]:
         return {"status": "missing", "reason": "no_packets", "dir": str(packet_dir)}
     latest = max(packets, key=lambda p: p.stat().st_mtime)
     try:
-        doc = json.loads(latest.read_text(encoding="utf-8"))
+        packet_text = latest.read_text(encoding="utf-8")
+        doc = json.loads(packet_text)
     except Exception as exc:
         return {"status": "error", "reason": f"parse_failed_{type(exc).__name__}", "file": latest.name}
     schema_version = doc.get("schema_version") if isinstance(doc, dict) else None
@@ -274,13 +286,19 @@ def latest_learning_packet() -> dict[str, Any]:
             "schema_version": schema_version,
             "supported_schema_versions": sorted(SUPPORTED_LEARNING_PACKET_SCHEMAS),
         }
+    from paper_learning_consumer import consume, read_history
+    from self_optimization_ledger import ledger_path
+    paper_learning = consume(doc, read_history(ledger_path()), packet_file=latest.name)
+    paper_learning["packet_content_sha256"] = hashlib.sha256(packet_text.encode("utf-8")).hexdigest()
     return {
         "status": "present",
         "file": latest.name,
+        "paper_learning_consumption": paper_learning,
         "schema_version": schema_version,
         "summary": doc.get("summary"),
         "materiality_gate": doc.get("materiality_gate"),
         "skill_upgrade_candidates": doc.get("skill_upgrade_candidates") or [],
+        "mechanism_research": mechanism_learning_snapshot(doc.get("mechanism_research")),
     }
 
 
@@ -323,7 +341,7 @@ def performance_snapshot() -> dict[str, Any]:
     """Advisory read-only view of the skill's OWN track record.
 
     Derives performance_materiality strictly from EXISTING anti-overfit gates:
-    the learning packet's own materiality_gate (>=20 closed trades), the
+    the learning packet's separate research and per-strategy sizing gates, the
     decision-memory's gates (min_samples, pattern thresholds), and the
     calibration scorecard (loop B). Never blocks validators and never moves
     live sizing.
@@ -334,7 +352,16 @@ def performance_snapshot() -> dict[str, Any]:
 
     gate = packet.get("materiality_gate") or {}
     packet_sizing_eligible = bool(gate.get("enough_for_policy_sizing_change"))
-    packet_candidates = packet.get("skill_upgrade_candidates") or []
+    paper_learning = packet.get("paper_learning_consumption") or {}
+    # Structured research eligibility is separate from the 30-sample sizing gate.
+    # A reviewed/repeated real sample set does not become fresh evidence on a timer.
+    structured_learning = paper_learning.get("structured_evidence_present") is True
+    packet_research_eligible = (paper_learning.get("research_upgrade_eligible") is True
+                               and paper_learning.get("new_review_candidate_count", 0) > 0)
+    if structured_learning:
+        packet_sizing_eligible = (packet_sizing_eligible and paper_learning.get("status") == "present"
+                                  and paper_learning.get("new_independent_sample_count", 0) > 0)
+    packet_candidates = [] if structured_learning else packet.get("skill_upgrade_candidates") or []
     memory_adjustment = bool(memory.get("adjustment_applied"))
     mem_samples = int(memory.get("sample_count") or 0)
     mem_min = int(memory.get("min_samples") or 12)
@@ -348,6 +375,8 @@ def performance_snapshot() -> dict[str, Any]:
         drivers.append("learning_packet:enough_for_policy_sizing_change")
     if memory_adjustment:
         drivers.append("trading_memory:adjustment_applied")
+    if packet_research_eligible:
+        drivers.append("learning_packet:enough_for_trading_research_skill_upgrade_with_new_real_evidence")
     if packet_candidates:
         drivers.append(f"learning_packet:skill_upgrade_candidates({len(packet_candidates)})")
     if memory_gate_passed:
@@ -357,7 +386,7 @@ def performance_snapshot() -> dict[str, Any]:
 
     if packet_sizing_eligible or memory_adjustment:
         materiality = "high"
-    elif packet_candidates or memory_gate_passed or calibration_material:
+    elif packet_research_eligible or packet_candidates or memory_gate_passed or calibration_material:
         materiality = "medium"
     else:
         materiality = "none"
@@ -365,6 +394,8 @@ def performance_snapshot() -> dict[str, Any]:
     return {
         "learning_packet_status": packet.get("status", "missing"),
         "learning_packet": packet,
+        "paper_learning_consumption": paper_learning,
+        "research_upgrade_eligible": paper_learning.get("research_upgrade_eligible", False),
         "trading_memory_status": memory.get("status", "error"),
         "trading_memory_review": memory,
         "calibration_status": calibration.get("status", "error"),
@@ -421,12 +452,54 @@ def journal_liveness() -> dict[str, Any]:
 
 
 def hypothesis_registry_liveness() -> dict[str, Any]:
-    """Advisory: is the factor/signal hypothesis ledger being written to."""
+    """Advisory: ledger liveness plus read-only latest-factor reconciliation."""
     doc = run_json([sys.executable, str(SCRIPTS / "hypothesis_registry.py"), "list"], timeout=30)
     if not doc.get("_ok"):
         return {"status": "error", "error": doc.get("_error") or doc.get("_stderr") or doc.get("_message")}
     count = int(doc.get("count") or 0)
     result: dict[str, Any] = {"status": "empty" if count == 0 else "ok", "count": count}
+    reconciliation = run_json(
+        [sys.executable, str(SCRIPTS / "hypothesis_registry.py"), "reconcile"], timeout=30
+    )
+    result["reconciliation"] = reconciliation
+    if not reconciliation.get("_ok") or not reconciliation.get("ok"):
+        result["status"] = "error"
+        result["finding"] = (
+            "hypothesis registry factor reconciliation failed: "
+            f"{reconciliation.get('_error') or reconciliation.get('_stderr') or reconciliation.get('_message') or reconciliation.get('status')}"
+        )
+        return result
+    if reconciliation.get("ambiguous"):
+        result["status"] = "ambiguous_factor_identity"
+        result["finding"] = (
+            "hypothesis registry factor reconciliation found ambiguous records; "
+            "review duplicate factor reconciliation keys without auto-updating status"
+        )
+        return result
+    drift_count = int(reconciliation.get("drift_count") or 0)
+    if drift_count:
+        result["status"] = "factor_status_drift"
+        result["finding"] = (
+            f"hypothesis registry has {drift_count} factor status drift item(s) versus the latest verdict; "
+            "reconcile is read-only and did not auto-update status"
+        )
+        return result
+    no_recent_count = int(reconciliation.get("no_recent_evidence_count") or 0)
+    if no_recent_count:
+        result["status"] = "no_recent_evidence"
+        result["finding"] = (
+            f"hypothesis registry has {no_recent_count} factor record(s) with no corresponding factor in the latest verdict; "
+            "this is missing recent evidence, not status drift"
+        )
+        return result
+    not_judgeable_count = int(reconciliation.get("not_judgeable_count") or 0)
+    if not_judgeable_count:
+        result["status"] = "latest_factor_not_judgeable"
+        result["finding"] = (
+            f"latest factor verdict could not judge {not_judgeable_count} matched registry record(s); "
+            "registry status remains unchanged"
+        )
+        return result
     if count == 0:
         result["finding"] = "hypothesis registry is empty: factor/signal conclusions are not being registered per SKILL.md fixed-process step 3 write obligation"
     return result
@@ -577,13 +650,69 @@ def _load_self_optimization_ledger_module():
     return module
 
 
-def ledger_liveness(now: datetime | None = None) -> dict[str, Any]:
+def _cron_execution_crosscheck(
+    missing_dates: list[str],
+    db_path: pathlib.Path = DEFAULT_CRON_EXECUTIONS_DB,
+) -> dict[str, Any]:
+    """Classify missing ledger dates from explicitly configured cron history."""
+    if not SELF_OPT_CRON_JOB_ID:
+        return {"status": "unavailable", "reason": "cron_job_id_not_configured"}
+    if not db_path.exists():
+        return {"status": "unavailable", "reason": "executions_db_missing", "db": str(db_path)}
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5.0)
+    except sqlite3.OperationalError as exc:
+        return {"status": "unavailable", "reason": f"executions_db_open_failed:{type(exc).__name__}"}
+    try:
+        placeholders = ",".join("?" for _ in missing_dates)
+        rows = conn.execute(
+            f"SELECT status, substr(claimed_at, 1, 10) AS run_date FROM executions "
+            f"WHERE job_id = ? AND substr(claimed_at, 1, 10) IN ({placeholders})",
+            [SELF_OPT_CRON_JOB_ID, *missing_dates],
+        ).fetchall()
+    except sqlite3.OperationalError as exc:
+        return {"status": "unavailable", "reason": f"executions_query_failed:{type(exc).__name__}"}
+    finally:
+        conn.close()
+
+    statuses_by_date: dict[str, set[str]] = {day: set() for day in missing_dates}
+    for status, run_date in rows:
+        if run_date in statuses_by_date:
+            statuses_by_date[run_date].add(str(status))
+
+    completed: list[str] = []
+    failed: list[str] = []
+    unfinished: list[str] = []
+    absent: list[str] = []
+    for day in sorted(missing_dates):
+        statuses = statuses_by_date[day]
+        if "completed" in statuses:
+            completed.append(day)
+        elif "failed" in statuses:
+            failed.append(day)
+        elif statuses:
+            unfinished.append(day)
+        else:
+            absent.append(day)
+    return {
+        "status": "ok",
+        "job_id": SELF_OPT_CRON_JOB_ID,
+        "completed_without_ledger_append_dates": completed,
+        "failed_execution_dates": failed,
+        "unfinished_execution_dates": unfinished,
+        "no_execution_record_dates": absent,
+    }
+
+
+def ledger_liveness(
+    now: datetime | None = None,
+    cron_db_path: pathlib.Path = DEFAULT_CRON_EXECUTIONS_DB,
+) -> dict[str, Any]:
     """Advisory: does the self-optimization ledger have a missed-run gap.
 
     See finding ledger-health-blind-to-missed-runs: self_optimization_ledger.py
     query --health only inspects rows that exist (github/grok/blocked streaks,
-    eval_pass_count drops), so a day where the daily cron (94cb8dfe1563, cron
-    expr "10 7 * * *" -- every calendar day) fails before ever appending a row
+    eval_pass_count drops), so a day where the daily cron fails before ever appending a row
     is invisible to it; it kept returning ok:true through the 07-24/07-25
     back-to-back cron timeouts. This cross-checks the ledger's *date sequence*
     against the cron's daily cadence instead of only the rows it produced.
@@ -610,7 +739,6 @@ def ledger_liveness(now: datetime | None = None) -> dict[str, Any]:
             "finding": "self-optimization ledger has no parseable rows: the append step (self_optimization_ledger.py append) has never run or has never succeeded",
         }
 
-    dates_present = set(dates)
     latest = max(dates)
     today = now.date()
     # This check itself runs as the daily cron's first step, before that same
@@ -618,30 +746,39 @@ def ledger_liveness(now: datetime | None = None) -> dict[str, Any]:
     # not a gap. Scan backward from yesterday and stop at the first day that
     # does have a row; older isolated gaps are historical backfill noise, not
     # live cron drift.
-    missing: list[str] = []
-    cursor = today - timedelta(days=1)
-    window_start = cursor - timedelta(days=LEDGER_GAP_WINDOW_DAYS)
-    while cursor > window_start:
-        if cursor in dates_present:
-            break
-        missing.append(cursor.isoformat())
-        cursor -= timedelta(days=1)
+    missing = module.trailing_missing_dates(rows, today=today)
 
     gap_days = len(missing)
+    gap_threshold = int(module.LEDGER_GAP_MIN_CONSECUTIVE_DAYS)
     result: dict[str, Any] = {
-        "status": "gap" if gap_days >= LEDGER_GAP_MIN_CONSECUTIVE_DAYS else "ok",
+        "status": "gap" if gap_days >= gap_threshold else "ok",
         "latest_row_date": latest.isoformat(),
         "latest_row_age_days": (today - latest).days,
         "missing_trailing_dates": sorted(missing),
     }
-    if gap_days >= LEDGER_GAP_MIN_CONSECUTIVE_DAYS:
-        result["finding"] = (
-            f"self-optimization ledger missing {gap_days} consecutive trailing day(s) "
-            f"({', '.join(sorted(missing))}); the daily cron (94cb8dfe1563) did not complete/append "
-            "on those dates. Cross-check ~/.hermes/cron/executions.db for that job's failure reason "
-            "before trusting a recent self_optimization_ledger.py query --health ok:true -- health_report() "
-            "only inspects rows that exist and is blind to a day with zero rows."
-        )
+    if gap_days >= gap_threshold:
+        crosscheck = _cron_execution_crosscheck(sorted(missing), cron_db_path)
+        result["cron_execution_crosscheck"] = crosscheck
+        if crosscheck.get("status") == "ok":
+            completed_count = len(crosscheck["completed_without_ledger_append_dates"])
+            failed_count = len(crosscheck["failed_execution_dates"])
+            unfinished_count = len(crosscheck["unfinished_execution_dates"])
+            absent_count = len(crosscheck["no_execution_record_dates"])
+            result["finding"] = (
+                f"self-optimization ledger missing {gap_days} consecutive trailing day(s) "
+                f"({', '.join(sorted(missing))}); read-only cron execution cross-check found "
+                f"{completed_count} completed without ledger append, {failed_count} failed before append, "
+                f"{unfinished_count} unfinished/unknown, and {absent_count} with no execution record. "
+                "This separates closeout omission from transport failure; self_optimization_ledger.py query --health "
+                "now reports the date-sequence gap, while this read-only cross-check adds causal attribution."
+            )
+        else:
+            result["finding"] = (
+                f"self-optimization ledger missing {gap_days} consecutive trailing day(s) "
+                f"({', '.join(sorted(missing))}); cron execution cross-check is unavailable "
+                f"({crosscheck.get('reason')}). Inspect {cron_db_path} read-only before attributing the gap; "
+                "self_optimization_ledger.py query --health still reports the date-sequence gap without claiming a cause."
+            )
     return result
 
 

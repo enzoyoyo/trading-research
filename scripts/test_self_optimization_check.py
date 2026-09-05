@@ -25,11 +25,37 @@ def _iso_days_ago(now: datetime, days: int) -> str:
 
 
 class LedgerLivenessTests(unittest.TestCase):
+    def setUp(self) -> None:
+        job = unittest.mock.patch.object(soc, "SELF_OPT_CRON_JOB_ID", "synthetic-cron-job")
+        job.start()
+        self.addCleanup(job.stop)
+
+    def test_missing_cron_configuration_returns_gap_without_opening_database(self) -> None:
+        with unittest.mock.patch.object(soc, "SELF_OPT_CRON_JOB_ID", ""), \
+             unittest.mock.patch.object(soc.sqlite3, "connect") as connect:
+            result = soc._cron_execution_crosscheck(["2026-07-24"])
+        self.assertEqual(result, {"status": "unavailable", "reason": "cron_job_id_not_configured"})
+        connect.assert_not_called()
+
     def _write_ledger(self, path: Path, dates: list[str]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as fh:
             for d in dates:
                 fh.write(json.dumps({"date": d, "status": "no_necessary_upgrade"}) + "\n")
+
+    def _write_cron_executions(self, path: Path, rows: list[tuple[str, str]]) -> None:
+        conn = sqlite3.connect(path)
+        try:
+            conn.execute(
+                "CREATE TABLE executions (job_id TEXT NOT NULL, status TEXT NOT NULL, claimed_at TEXT NOT NULL)"
+            )
+            conn.executemany(
+                "INSERT INTO executions (job_id, status, claimed_at) VALUES (?, ?, ?)",
+                [(soc.SELF_OPT_CRON_JOB_ID, status, f"{day}T12:40:00+08:00") for day, status in rows],
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     def test_contiguous_ledger_up_to_yesterday_is_ok(self) -> None:
         now = datetime.fromisoformat("2026-07-26T07:15:00+00:00")
@@ -62,6 +88,30 @@ class LedgerLivenessTests(unittest.TestCase):
         self.assertEqual(result["missing_trailing_dates"], ["2026-07-24", "2026-07-25"])
         self.assertIn("finding", result)
         self.assertIn("2 consecutive trailing day(s)", result["finding"])
+
+    def test_gap_crosschecks_completed_failed_and_missing_cron_dates(self) -> None:
+        now = datetime.fromisoformat("2026-07-26T07:15:00+00:00")
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger_path = Path(tmp) / "ledger.jsonl"
+            cron_db = Path(tmp) / "executions.db"
+            self._write_ledger(ledger_path, ["2026-07-22"])
+            self._write_cron_executions(
+                cron_db,
+                [("2026-07-23", "completed"), ("2026-07-24", "failed")],
+            )
+
+            with unittest.mock.patch.object(soc, "_load_self_optimization_ledger_module") as loader:
+                loader.return_value = _StubLedgerModule(ledger_path)
+                result = soc.ledger_liveness(now=now, cron_db_path=cron_db)
+
+        crosscheck = result["cron_execution_crosscheck"]
+        self.assertEqual(crosscheck["status"], "ok")
+        self.assertEqual(crosscheck["completed_without_ledger_append_dates"], ["2026-07-23"])
+        self.assertEqual(crosscheck["failed_execution_dates"], ["2026-07-24"])
+        self.assertEqual(crosscheck["no_execution_record_dates"], ["2026-07-25"])
+        self.assertIn("completed without ledger append", result["finding"])
+        self.assertIn("failed before append", result["finding"])
+        self.assertNotIn("did not complete/append on those dates", result["finding"])
 
     def test_single_missing_day_is_below_alert_threshold(self) -> None:
         now = datetime.fromisoformat("2026-07-26T07:15:00+00:00")
@@ -134,6 +184,8 @@ class _StubLedgerModule:
     def ledger_path(self) -> Path:
         return self._path
 
+    LEDGER_GAP_MIN_CONSECUTIVE_DAYS = 2
+
     def read_rows(self, path: Path) -> list[dict]:
         if not path.exists():
             return []
@@ -143,6 +195,18 @@ class _StubLedgerModule:
             if line:
                 rows.append(json.loads(line))
         return rows
+
+    def trailing_missing_dates(self, rows: list[dict], today, window_days: int = 10) -> list[str]:
+        dates_present = {datetime.fromisoformat(str(row["date"])).date() for row in rows if row.get("date")}
+        missing = []
+        cursor = today - timedelta(days=1)
+        window_start = cursor - timedelta(days=window_days)
+        while cursor > window_start:
+            if cursor in dates_present:
+                break
+            missing.append(cursor.isoformat())
+            cursor -= timedelta(days=1)
+        return sorted(missing)
 
 
 class PendingPredictionOrphanTests(unittest.TestCase):
@@ -408,6 +472,37 @@ class CalibrationLivenessDataLinkTests(unittest.TestCase):
         with unittest.mock.patch.object(soc, "run_json", return_value={"_ok": False, "_stderr": "boom"}):
             result = soc.calibration_liveness()
         self.assertEqual(result["status"], "error")
+
+
+class HypothesisRegistryReconciliationLivenessTests(unittest.TestCase):
+    def test_factor_status_drift_surfaces_without_auto_repair(self) -> None:
+        responses = [
+            {"_ok": True, "count": 2},
+            {
+                "_ok": True, "ok": True, "read_only": True,
+                "drift_count": 1, "no_recent_evidence_count": 0,
+                "not_judgeable_count": 0, "ambiguous": [],
+            },
+        ]
+        with unittest.mock.patch.object(soc, "run_json", side_effect=responses):
+            result = soc.hypothesis_registry_liveness()
+        self.assertEqual(result["status"], "factor_status_drift")
+        self.assertTrue(result["reconciliation"]["read_only"])
+        self.assertIn("did not auto-update", result["finding"])
+
+    def test_absent_latest_factor_surfaces_as_no_recent_evidence(self) -> None:
+        responses = [
+            {"_ok": True, "count": 1},
+            {
+                "_ok": True, "ok": True, "read_only": True,
+                "drift_count": 0, "no_recent_evidence_count": 1,
+                "not_judgeable_count": 0, "ambiguous": [],
+            },
+        ]
+        with unittest.mock.patch.object(soc, "run_json", side_effect=responses):
+            result = soc.hypothesis_registry_liveness()
+        self.assertEqual(result["status"], "no_recent_evidence")
+        self.assertIn("not status drift", result["finding"])
 
 
 class LoopLivenessWiringTests(unittest.TestCase):

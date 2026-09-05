@@ -245,10 +245,18 @@ implied_vs_typical_ratio = implied_move_premium_pct / hist_median
 
 bid 或 ask 缺失、ask < bid、ATM 双边不齐或 spot 无效时，隐含幅度及其全部派生字段一起为 `null`。显式 `--expiry` 应是财报后首到期；未提供财报日期与 expiry 时，脚本只能选择最近可用 expiry，并强制披露 `earnings_release_date_unavailable_expiry_not_verified`。
 
-`implied_vs_typical_ratio >= 1.25` 标 `RICH`，`<= 0.95` 标 `CHEAP`，中间标 `FAIR`；阈值来源记为 `method_source=balder_public_docs`。这些标签只描述期权定价相对该标的历史财报反应，不预测方向。若未来增加 butterfly 密度或积分概率，必须写 `risk_neutral=true`；字段只能命名为 `risk_neutral_p_up`，不得写成物理 `P(up)`。
+`implied_vs_typical_ratio >= 1.25` 标 `RICH`，`<= 0.95` 标 `CHEAP`，中间标 `FAIR`；保留旧 CLI/API 的 median 比较，但来源改为 `method_source=independent_unvalidated_median_adaptation`。这是独立、未校验的中位数启发式：1.25 / 0.95 尚未在该统计口径上验证，不能借作者权威当成有效定价结论。原始网站 radar 说明的是最近 9 次绝对反应的 **mean**；AAOI 示例卡则展示 **median / last 8**，两种材料不构成统一公式，不能互换分母或补造第 9 个样本。当前实现继续使用现有有效事件的 median，不声称复现网站 mean-last-nine；偏斜样本下两者可能得出相反标签。
+
+`comparison_contract` 明确分母统计量、作者文档口径、`author_formula_reproduced=false` 和 `threshold_validation=unvalidated_for_median`。旧标量接口仍兼容；可选 `hist_metadata` 和缓存解析现在保留 `sample_count / window_dates / history_as_of`，作为 `reported_not_verified` 声明；缺失字段保持 null，不能凭缓存来源或本次计算时间宣称 verified。`resolve_hist_median(..., metadata=dict)` 保持原三元组返回值，并通过可选字典传递元数据。可算出 ratio 时仍报告这两个方法/元数据缺口并降为 partial；仅描述比较，不预测方向。若未来增加 butterfly 密度或积分概率，必须写 `risk_neutral=true`；字段只能命名为 `risk_neutral_p_up`，不得写成物理 `P(up)`。
 
 ### 11.4 Consensus 冻结与 Compiler 接线
 
 US `scripts/fundamental_snapshot.py` 可读取 LongBridge `consensus` / `forecast-eps` 并把标准化 EPS 共识冻结到 `~/.cache/hermes/trading-research/earnings-radar/consensus/{SYMBOL}/`。`beat_rate_last_8` 只允许从本地先于结果冻结的共识与之后实际值形成 8 组时间有序配对；不足 8 组即 `null`，禁止用当前页面事后回填历史。
 
 以上产物只可作为 `modeled_scenario`、`quant_robustness`、`participant_flow` 的只读输入，统一 `position_multiplier=0.0`、`cannot_raise_upstream=true`。它们不得新建 Compiler module，不得提高 action level / position cap / reliability，不得复活 L0；财报窗口仍由既有 `event_proximity` / `execution_window` 与 `earnings_blackout` 裁决。
+
+### 财报描述性产物的时钟边界
+
+`earnings_implied_distribution.as_of` 仅来自链的 `payload.timestamp` 或 `data.timestamp`；缺失为 null 与 `quote_clock_missing`，非法、无时区或未来时间拒绝为 `invalid_clock` / `future_clock`。`computed_at` 只表示本次计算。`source_freshness.clocks` 分开列出报价、历史数据与历史计算时间及来源；旧 `build_history.as_of` 是历史计算钟，绝不填入 `history_as_of`。没有年龄阈值策略时只声明 `unknown_no_age_policy`，不发明 stale 判定。
+
+没有源时钟仍保留可计算的描述性 implied move 和未经验证的 median ratio。未来或非法的历史时钟/窗口阻止历史 ratio 标签，implied move 仍保留。明确提供 `latest_known_earnings_date`（CLI `--latest-known-earnings-date`）且报告窗口的最新 event_date 更早时，标记 `hist_median_excludes_latest_print` 并清空 ratio/标签；未提供日期则 `unknown_latest_earnings_date`，窗口缺失则 `unknown_history_window`。这些输入都只是报告值，日期覆盖不等于历史样本或作者公式已验证。

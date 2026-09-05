@@ -93,10 +93,11 @@ MODULE_POSITION_MULTIPLIER_CAP: dict[tuple[str, str | None], tuple[float, str]] 
     ("quant_robustness", "train_only"): (0.0, "decision-compiler.md:75 train_only/noise/reversed_strict position_multiplier=0.0"),
     ("quant_robustness", "noise"): (0.0, "decision-compiler.md:75 train_only/noise/reversed_strict position_multiplier=0.0"),
     ("quant_robustness", "reversed_strict"): (0.0, "decision-compiler.md:75 train_only/noise/reversed_strict position_multiplier=0.0"),
+    ("endogenous_structure", "counter_consensus_thesis"): (0.3, "decision-compiler.md:78 counter_consensus_thesis position_multiplier<=0.3"),
 }
 
 # research_readiness ceiling table (Mira Quality Gate -> Compiler mapping,
-# decision-compiler.md lines 82-92). Only applied to module=="research_readiness"
+# decision-compiler.md lines 83-93). Only applied to module=="research_readiness"
 # signals; readiness_level/knowability_status are read as optional extra fields on
 # the signal (not part of the v2 base schema) -- signals that omit them still get
 # the unconditional "never independently claim REDUCE/EXIT" ceiling below (rule 9).
@@ -149,19 +150,22 @@ def _readiness_ceiling(signal: dict[str, Any]) -> tuple[str, str] | None:
             candidate = "L2"
         if ACTION_ORDER[candidate] < ACTION_ORDER[ceiling]:
             ceiling = candidate
-            doc_ref = f"decision-compiler.md:82-92 readiness_level={readiness_level}"
+            doc_ref = f"decision-compiler.md:83-93 readiness_level={readiness_level}"
     knowability = str(signal.get("knowability_status") or "").strip()
     if knowability in KNOWABILITY_ACTION_CEILING:
         candidate = KNOWABILITY_ACTION_CEILING[knowability]
         if ACTION_ORDER[candidate] < ACTION_ORDER[ceiling]:
             ceiling = candidate
-            doc_ref = f"decision-compiler.md:89 knowability_status={knowability}"
+            doc_ref = f"decision-compiler.md:90 knowability_status={knowability}"
     return ceiling, doc_ref
 
 
 HK_DEEP_VALUE_DOC_REF = "decision-compiler.md:76 hk_deep_value_no_catalyst entry_permission 封顶 WATCH"
 HK_MOMENTUM_REVIEW_DOC_REF = (
     "decision-compiler.md:77 hk_momentum_drawdown_review 强制止盈/止损复核，复核前不得维持或提高原动作等级"
+)
+COUNTER_CONSENSUS_DOC_REF = (
+    "decision-compiler.md:78 counter_consensus_thesis 缺 falsifier/time_stop 时 entry_permission 封顶 WATCH"
 )
 
 
@@ -268,6 +272,25 @@ def apply_caps(signals: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], lis
                 })
                 row["holding_directive"] = "REDUCE"
 
+        if module == "endogenous_structure" and sub_framework == "counter_consensus_thesis":
+            missing_fields = [
+                field for field in ("falsifier", "time_stop")
+                if not isinstance(row.get(field), str) or not row[field].strip()
+            ]
+            current_entry = _current_entry(row)
+            if missing_fields and ENTRY_ORDER[current_entry] > ENTRY_ORDER["WATCH"]:
+                applied.append({
+                    "module": module,
+                    "sub_framework": sub_framework,
+                    "constraint": label,
+                    "field": "entry_permission",
+                    "requested": current_entry,
+                    "capped_to": "WATCH",
+                    "doc_ref": COUNTER_CONSENSUS_DOC_REF,
+                    "missing_fields": missing_fields,
+                })
+                row["entry_permission"] = "WATCH"
+
         capped.append(row)
 
     return capped, applied
@@ -316,6 +339,53 @@ def clamp_multiplier(value: Any) -> float:
     if parsed is None:
         return 0.0
     return max(0.0, min(1.0, parsed))
+
+
+def aggregate_position_multipliers(
+    signals: list[dict[str, Any]],
+) -> tuple[float, list[dict[str, Any]]]:
+    """Take the tightest multiplier inside a module, then multiply modules.
+
+    Multiple overlays can compile into the same registered module and are often
+    correlated views of the same underlying facts. Multiplying them separately
+    double-counts that risk. The non-selected rows remain visible in the audit
+    trail so aggregation is deterministic and reviewable.
+    """
+    grouped: dict[str, list[tuple[int, dict[str, Any], float]]] = {}
+    for index, signal in enumerate(signals):
+        module = str(signal.get("module") or "").strip()
+        grouped.setdefault(module, []).append(
+            (index, signal, clamp_multiplier(signal.get("position_multiplier", 1.0)))
+        )
+
+    module_multipliers: list[float] = []
+    audit: list[dict[str, Any]] = []
+    for module, rows in grouped.items():
+        selected_index, selected_signal, module_min = min(
+            rows,
+            key=lambda item: (item[2], constraint_label(item[1]) or "", item[0]),
+        )
+        module_multipliers.append(module_min)
+        if len(rows) == 1:
+            continue
+        selected_constraint = constraint_label(selected_signal)
+        for index, signal, requested in rows:
+            if index == selected_index:
+                continue
+            audit.append({
+                "module": module,
+                "sub_framework": str(signal.get("sub_framework") or "").strip() or None,
+                "constraint": constraint_label(signal),
+                "field": "position_multiplier",
+                "requested": requested,
+                "capped_to": module_min,
+                "doc_ref": "decision-compiler.md rule 4 same-module min aggregation",
+                "superseded_by_min": True,
+                "selected_constraint": selected_constraint,
+            })
+
+    final_multiplier = reduce(mul, module_multipliers, 1.0)
+    return max(0.0, min(1.0, round(final_multiplier, 4))), audit
 
 
 def level_to_axes(signal: dict[str, Any]) -> tuple[str, str, str]:
@@ -537,8 +607,8 @@ def compile_payload(payload: dict[str, Any], *, now: datetime | None = None) -> 
     else:
         entry_permission = min(entry_permissions, key=lambda value: ENTRY_ORDER[value], default="WATCH")
 
-    multipliers = [clamp_multiplier(signal.get("position_multiplier", 1.0)) for signal in capped_signals]
-    final_multiplier = max(0.0, min(1.0, round(reduce(mul, multipliers, 1.0), 4)))
+    final_multiplier, aggregation_audit = aggregate_position_multipliers(capped_signals)
+    cap_applied.extend(aggregation_audit)
     if entry_permission == "BLOCK" or hard_vetoes or unresolved:
         final_multiplier = 0.0
     elif final_multiplier == 0.0:
@@ -584,7 +654,7 @@ def compile_payload(payload: dict[str, Any], *, now: datetime | None = None) -> 
         "manual_review_required": (not strict) or bool(epistemic_vetoes),
         "required_modules": context.get("required_modules", []),
         "signal_count": len(capped_signals),
-        "rule": "contract_validation > non-open intent blocks entry > hard_veto/conflict > holding(EXIT>REDUCE>HOLD) + entry(min permission); multipliers multiply; caps applied per Cap & Tighten-Only Registry",
+        "rule": "contract_validation > non-open intent blocks entry > hard_veto/conflict > holding(EXIT>REDUCE>HOLD) + entry(min permission); multipliers use same-module min then cross-module product; caps applied per Cap & Tighten-Only Registry",
         "no_order_execution": True,
     }
 

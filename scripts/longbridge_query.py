@@ -76,14 +76,51 @@ def longbridge_bin():
     return candidate
 
 
+READ_ONLY_CLI_COMMANDS = {'quote', 'kline'}
+LONG_BRIDGE_AUTH_ENV_KEYS = tuple(
+    f'{prefix}_{field}'
+    for prefix in ('LONGBRIDGE', 'LONGPORT')
+    for field in ('APP_KEY', 'APP_SECRET', 'ACCESS_TOKEN')
+)
+
+
+def _is_expired_token_error(stderr):
+    """Match only the observed explicit-token expiry failure."""
+    text = str(stderr or '').lower()
+    return '401003' in text and 'token expired' in text
+
+
 def run_cli_json(args, timeout=180):
-    """Run LongBridge CLI read-only command and parse JSON output."""
+    """Run a LongBridge CLI read-only command and parse JSON output.
+
+    A stale explicit token can mask a still-valid CLI OAuth session. For quote
+    and kline only, retry exactly once after the observed 401003 expiry and
+    remove both LongBridge and LongPort credential variables from that child.
+    All other failures and any non-read-only command fail without retry.
+    """
+    command = [longbridge_bin(), *args]
     proc = subprocess.run(
-        [longbridge_bin(), *args],
+        command,
         text=True,
         capture_output=True,
         timeout=timeout,
     )
+    if (
+        proc.returncode != 0
+        and args
+        and args[0] in READ_ONLY_CLI_COMMANDS
+        and _is_expired_token_error(proc.stderr)
+    ):
+        oauth_env = os.environ.copy()
+        for key in LONG_BRIDGE_AUTH_ENV_KEYS:
+            oauth_env.pop(key, None)
+        proc = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            env=oauth_env,
+        )
     if proc.returncode != 0:
         raise RuntimeError(f"longbridge CLI {' '.join(args)} failed rc={proc.returncode}: {proc.stderr[-500:]}")
     try:
@@ -101,6 +138,7 @@ def normalize_cli_candle(row):
         'low': float(row['low']),
         'close': float(row['close']),
         'volume': int(row.get('volume') or 0),
+        'turnover': _to_float(row.get('turnover')),
     }
 
 
@@ -186,10 +224,20 @@ def cmd_quote(ctx, symbols):
     return results
 
 
-def cmd_candle(ctx, symbol, period='day', count=5):
-    """K线数据"""
+def cmd_candle(ctx, symbol, period='day', count=5, adjust='forward'):
+    """K线数据；日线默认前复权，SDK/CLI 两路口径一致。"""
+    adjust_map = {
+        'none': AdjustType.NoAdjust if AdjustType is not None else None,
+        'forward': AdjustType.ForwardAdjust if AdjustType is not None else None,
+    }
+    if adjust not in adjust_map:
+        raise ValueError(f'unsupported candle adjust: {adjust}')
+    cli_args = [
+        'kline', symbol, '--period', period, '--count', str(count),
+        '--adjust', adjust, '--format', 'json',
+    ]
     if ctx is None:
-        rows = run_cli_json(['kline', symbol, '--period', period, '--count', str(count), '--format', 'json'])
+        rows = run_cli_json(cli_args)
         if not isinstance(rows, list):
             raise RuntimeError(f'longbridge CLI returned non-list kline payload for {symbol}')
         return [normalize_cli_candle(row) for row in rows if isinstance(row, dict)]
@@ -201,9 +249,9 @@ def cmd_candle(ctx, symbol, period='day', count=5):
     }
     p = period_map.get(period, Period.Day)
     try:
-        candles = ctx.candlesticks(symbol, p, count, AdjustType.NoAdjust)
+        candles = ctx.candlesticks(symbol, p, count, adjust_map[adjust])
     except Exception:
-        rows = run_cli_json(['kline', symbol, '--period', period, '--count', str(count), '--format', 'json'])
+        rows = run_cli_json(cli_args)
         if not isinstance(rows, list):
             raise RuntimeError(f'longbridge CLI returned non-list kline payload for {symbol}')
         return [normalize_cli_candle(row) for row in rows if isinstance(row, dict)]
@@ -214,6 +262,7 @@ def cmd_candle(ctx, symbol, period='day', count=5):
         'low': float(c.low),
         'close': float(c.close),
         'volume': int(c.volume),
+        'turnover': float(c.turnover) if c.turnover is not None else None,
     } for c in candles]
 
 
@@ -253,6 +302,8 @@ def main():
     parser.add_argument('symbols', nargs='*', help='股票代码 (如 TSLA.US 600519.SH)')
     parser.add_argument('--period', default='day', help='K线周期 (1m/5m/15m/30m/60m/day/week/month)')
     parser.add_argument('--count', type=int, default=5, help='K线数量')
+    parser.add_argument('--adjust', choices=['none', 'forward'], default='forward',
+                        help='复权类型（默认 forward 前复权）')
     parser.add_argument('--json', action='store_true', help='JSON输出')
 
     args = parser.parse_args()
@@ -269,7 +320,7 @@ def main():
             if not args.symbols:
                 print('请指定股票代码', file=sys.stderr)
                 sys.exit(1)
-            result = cmd_candle(ctx, args.symbols[0], args.period, args.count)
+            result = cmd_candle(ctx, args.symbols[0], args.period, args.count, args.adjust)
         elif args.command == 'session':
             result = cmd_session(ctx)
         elif args.command == 'depth':

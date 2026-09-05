@@ -42,7 +42,7 @@ def backtest(costs: str = "yes", segmented: bool = True) -> dict:
         "schema_version": "factor_backtest_run.v1", "status": "ok", "factor": "mom_20_1",
         "costs_included": costs,
         "train": {"periods": 8} if segmented else None,
-        "test": {"periods": 4} if segmented else None,
+        "test": {"periods": 4, "sharpe": 0.5} if segmented else None,
         "robustness_checks": ["no_lookahead_fac_shift>=1", "survivorship_current_constituents"],
         "failure_modes": [], "no_order_execution": True,
     }
@@ -61,6 +61,44 @@ class FactorVerdictTests(unittest.TestCase):
         self.assertEqual(self.judge(reversed_row)["state"], "reversed_strict")
         self.assertEqual(self.judge(stats(overall_alpha=0.2, train_alpha=3.499, test_alpha=0.1))["state"], "noise")
 
+    def test_classify_orients_negative_direction_and_freezes_research(self) -> None:
+        cases = (
+            ("negative_confirmed", stats(overall_alpha=-4.0, train_alpha=-4.0, test_alpha=-4.0,
+                                         overall_ic=-0.04, train_ic=-0.04, test_ic=-0.03),
+             "-", "confirmed_alive"),
+            ("negative_reversed", stats(overall_alpha=4.0, train_alpha=4.0, test_alpha=4.0,
+                                        overall_ic=0.04, train_ic=0.04, test_ic=0.03),
+             "-", "reversed_strict"),
+            ("negative_train_only", stats(overall_alpha=-4.0, train_alpha=-4.0, test_alpha=-1.0,
+                                          overall_ic=-0.04, train_ic=-0.04, test_ic=-0.03),
+             "-", "train_only"),
+            ("research_frozen", stats(overall_alpha=-4.0, train_alpha=-4.0, test_alpha=-4.0,
+                                      overall_ic=-0.04, train_ic=-0.04, test_ic=-0.03),
+             "research", "noise"),
+        )
+        for name, row, direction, expected in cases:
+            with self.subTest(case=name):
+                self.assertEqual(verdict.classify(row, direction), expected)
+
+    def test_build_verdict_orients_negative_direction_and_freezes_research(self) -> None:
+        cases = (
+            ("negative_confirmed", stats(overall_alpha=-4.0, train_alpha=-4.0, test_alpha=-4.0,
+                                         overall_ic=-0.04, train_ic=-0.04, test_ic=-0.03),
+             "-", "confirmed_alive"),
+            ("negative_reversed", stats(overall_alpha=4.0, train_alpha=4.0, test_alpha=4.0,
+                                        overall_ic=0.04, train_ic=0.04, test_ic=0.03),
+             "-", "reversed_strict"),
+            ("negative_train_only", stats(overall_alpha=-4.0, train_alpha=-4.0, test_alpha=-1.0,
+                                          overall_ic=-0.04, train_ic=-0.04, test_ic=-0.03),
+             "-", "train_only"),
+            ("research_frozen", stats(overall_alpha=-4.0, train_alpha=-4.0, test_alpha=-4.0,
+                                      overall_ic=-0.04, train_ic=-0.04, test_ic=-0.03),
+             "research", "noise"),
+        )
+        for name, row, direction, expected in cases:
+            with self.subTest(case=name):
+                self.assertEqual(self.judge(row, direction)["state"], expected)
+
     def test_same_sign_required_for_confirmed(self) -> None:
         row = stats(overall_alpha=5.0, train_alpha=4.0, test_alpha=4.0, train_ic=0.03, test_ic=-0.02)
         self.assertEqual(self.judge(row)["state"], "noise")
@@ -77,6 +115,37 @@ class FactorVerdictTests(unittest.TestCase):
         short = backtest()
         short["test"]["periods"] = verdict.MIN_OOS_PERIODS - 1
         result = self.judge(row, bt=short)
+        self.assertEqual(result["decision_use"], "hypothesis_only")
+        self.assertIn("missing_walk_forward", result["data_gaps"])
+
+    def test_negative_oos_net_sharpe_forces_hypothesis_only(self) -> None:
+        row = stats(overall_alpha=5.0, train_alpha=4.0, test_alpha=4.0)
+        negative = backtest()
+        negative["test"]["sharpe"] = -0.5
+        result = self.judge(row, bt=negative)
+        self.assertEqual(result["decision_use"], "hypothesis_only")
+        self.assertIn("oos_net_sharpe_nonpositive", result["data_gaps"])
+
+    def test_zero_oos_net_sharpe_forces_hypothesis_only(self) -> None:
+        row = stats(overall_alpha=5.0, train_alpha=4.0, test_alpha=4.0)
+        zero = backtest()
+        zero["test"]["sharpe"] = 0.0
+        result = self.judge(row, bt=zero)
+        self.assertEqual(result["decision_use"], "hypothesis_only")
+        self.assertIn("oos_net_sharpe_nonpositive", result["data_gaps"])
+
+    def test_positive_oos_net_sharpe_allows_ranking_support(self) -> None:
+        row = stats(overall_alpha=5.0, train_alpha=4.0, test_alpha=4.0)
+        positive = backtest()
+        positive["test"]["sharpe"] = 0.5
+        result = self.judge(row, bt=positive)
+        self.assertEqual(result["decision_use"], "ranking_support")
+
+    def test_missing_oos_net_sharpe_is_missing_walk_forward(self) -> None:
+        row = stats(overall_alpha=5.0, train_alpha=4.0, test_alpha=4.0)
+        missing = backtest()
+        missing["test"].pop("sharpe")
+        result = self.judge(row, bt=missing)
         self.assertEqual(result["decision_use"], "hypothesis_only")
         self.assertIn("missing_walk_forward", result["data_gaps"])
 
@@ -113,6 +182,23 @@ class FactorVerdictTests(unittest.TestCase):
         self.assertEqual(result["status"], "not_judgeable")
         self.assertEqual(result["readiness_level"], "research_hypothesis")
 
+    def test_verdict_has_stable_reconciliation_identity_and_falsifier(self) -> None:
+        result = self.judge(stats(overall_alpha=5.0, train_alpha=4.0, test_alpha=4.0))
+        self.assertEqual(result["reconciliation_key"], "A|mom_20_1|5")
+        self.assertEqual(result["hypothesis_payload"]["reconciliation_key"], result["reconciliation_key"])
+        self.assertEqual(result["hypothesis_payload"]["record_type"], "factor_verdict")
+        self.assertTrue(result["hypothesis_payload"]["falsifiers"])
+        self.assertEqual(result["market"], "A")
+
+    def test_save_verdict_writes_named_artifact_and_latest_atomically(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.judge(stats(overall_alpha=5.0, train_alpha=4.0, test_alpha=4.0))
+            path = verdict.save_verdict(result, Path(tmp))
+            latest = Path(tmp) / "latest.json"
+            self.assertTrue(path.exists())
+            self.assertTrue(latest.exists())
+            self.assertEqual(json.loads(latest.read_text())["verdict_path"], str(path))
+
     def test_registry_cli_actual_create_in_tempdir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             registry = Path(tmp) / "registry.json"
@@ -130,6 +216,9 @@ class FactorVerdictTests(unittest.TestCase):
             rows = json.loads(registry.read_text())["hypotheses"]
             self.assertEqual(rows[0]["status"], "confirmed_alive")
             self.assertEqual(rows[0]["source_module"], "quant_robustness")
+            self.assertEqual(rows[0]["record_type"], "factor_verdict")
+            self.assertEqual(rows[0]["reconciliation_key"], "A|mom_20_1|5")
+            self.assertTrue(rows[0]["falsifiers"])
 
     def test_fixture_contract_regression(self) -> None:
         verdict.validate_fixture(ROOT / "templates" / "factor-experiment-example.json")

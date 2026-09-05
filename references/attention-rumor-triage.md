@@ -1,5 +1,7 @@
 # Attention & Rumor Triage · 热点、异动与传闻分流
 
+> 主落点声明：编译进 `endogenous_structure`；来源可信度与事实回抓仍走下文列出的证据模块。
+
 ## 目的
 
 把“大家都在讨论”拆成两个互不替代的轴：

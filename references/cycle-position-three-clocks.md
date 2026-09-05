@@ -1,6 +1,8 @@
 # Cycle Position Three Clocks · 周期三时钟与类比先验门
 
-> 来源边界：蒸馏自 Balder 2026-07-02 Substack《The Memory Trade on Nvidia Time》（公开全文）、Citrini 2026-07-01 DRAM/Jevons 帖与 2026-06-22 Getty/Shutterstock 复盘帖、Frank 2026-06-13 注意力时代帖。文中 MU/NVDA/存储周期数值是 **2026-07 实例，禁止照抄**到其它周期或标的；机制可迁移、实例不可套用。
+> 主落点声明：编译进 `endogenous_structure`；基本面钟仍按下文进入 `fundamentals`。
+
+> 来源边界：参考 Balder 2026-07-02 Substack《The Memory Trade on Nvidia Time》（公开全文）、Citrini 2026-07-01 DRAM/Jevons 帖与 2026-06-22 Getty/Shutterstock 复盘帖、Frank 2026-06-13 注意力时代帖。文中 MU/NVDA/存储周期数值是 **2026-07 实例，禁止照抄**到其它周期或标的；机制可迁移、实例不可套用。
 
 ## 核心命题
 

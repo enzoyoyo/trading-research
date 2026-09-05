@@ -27,7 +27,7 @@ Pass conditions:
 Fail conditions:
 - `account_channel == "lb"` or missing → live/default account. Stop.
 - OAuth/CLI/MCP auth cannot prove paper status → stop.
-- Paper funds are unavailable/invalid → stop and ask the user to enable/reset in LongBridge developer center.
+- Paper funds are unavailable/invalid → stop and ask 用户 to enable/reset in LongBridge developer center.
 - If a token created under the paper-only HOME resolves to an Integrated A/C / live `H...` account, treat it as a contaminated candidate: delete that isolated token immediately and restart auth. Never keep a live token inside the paper profile.
 
 ## Device-flow pitfall
@@ -44,7 +44,7 @@ Correct sequence:
 Official docs state: paper and live accounts share App Key & Secret but use different Access Tokens; trading permissions are tied to the Access Token.
 
 Default setup:
-1. the user opens `https://open.longbridge.com/dashboard/`.
+1. 用户 opens `https://open.longbridge.com/dashboard/`.
 2. Enable paper account / 模拟账户 in Developer Center.
 3. Generate a paper account Agent Auth Code or paper Access Token.
 4. Store paper credentials in an isolated location, never overwriting the live CLI token:
@@ -56,8 +56,8 @@ Default setup:
 - Paper HOME: `${HOME}/.hermes/longbridge-paper-home`.
 - Workspace: `${HOME}/.hermes/longbridge-paper-trading/`.
 - Gate: `${HOME}/.hermes/scripts/longbridge-paper-gate.sh`.
-- Learning cycle cron: `7b83f5ea92dd` + `327f90d45676`, script `~/.hermes/scripts/longbridge_paper_learning_cycle.sh`; static schedules only cover possible US/HK/CN/SG trading windows (`*/10 9-11,13-15,21-23 * * 1-5` for Asia/HK/CN daytime + US open, `*/10 0-5 * * 2-6` for US after-midnight session), then `~/.hermes/longbridge-paper-trading/scripts/market_session_guard.py` verifies official trading day + configured allowed session before any proposal/executor step. Outside allowed sessions it exits 0 with empty stdout under `--notify-only-on-action`.
-- Daily decision guard: `~/.hermes/scripts/longbridge_paper_decision_market_guard.sh` injects US trading-day/session JSON into the LLM cron `0f3a23b24364`; `allowed=false` means stop before web/X/data fetch or proposal generation.
+- Learning cycle: configure the independent runner for the intended HK/US sessions and verify official trading days before any proposal or executor step. Outside eligible sessions, exit quietly; this package contains no installed schedule or job identity.
+- Daily decision guard: the external runner must inject official HK/US trading-day and eligible-session status before research or proposal generation; `allowed=false` stops the run. Schedules and job identifiers are configured outside this package.
 - Dry-run strategy: `~/.hermes/longbridge-paper-trading/scripts/daily_paper_strategy.py`.
 - Signal generator: `~/.hermes/longbridge-paper-trading/scripts/paper_signal_generator.py`; creates proposal JSON only; never submits orders.
 - Order executor: `~/.hermes/longbridge-paper-trading/scripts/paper_trade_executor.py`; default dry-run; writes `journal/paper_orders.jsonl` before any possible submit.

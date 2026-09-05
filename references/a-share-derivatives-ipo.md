@@ -1,5 +1,7 @@
 # A-Share Derivatives & IPO Subscription
 
+> 主落点声明：编译进 `endogenous_structure`；可转债基本面与申购直答边界仍按下文分流。
+
 ## 覆盖范围
 
 A 股 ETF 期权（50ETF/300ETF/500ETF）、可转债（双低框架+强赎条款风险）、新股/可转债打新（申购类 Tier 0/1 场景）。美股/港股期权走 `options-gamma-structure.md`；本文件不重复其框架，且**明确二者不可直接移植**（见下）。

@@ -2,7 +2,12 @@
 from __future__ import annotations
 import argparse
 import json
+import os
 import re
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
 
 # Raw importance scores. normalize() converts them to 100-point weights.
 # Keep fields explicit so references/method-rotation-matrix.md and runtime output do not drift.
@@ -52,6 +57,16 @@ SCENARIO_LABELS = {
     "event": "事件驱动/财报前后",
 }
 
+SEVERE_RISK_REGIMES = {"active_deleveraging", "forced_liquidation"}
+OFFENSIVE_METHODS = (
+    "youzi_emotion",
+    "early_stage_quality",
+    "a_share_short_term",
+    "livermore",
+)
+LOCAL_TIMEZONE = ZoneInfo("Asia/Shanghai")
+RISK_SNAPSHOT_SCHEMA = "risk_regime_snapshot.v1"
+
 
 def markdown_matrix() -> str:
     """Render the documentation matrix from the runtime source of truth."""
@@ -69,7 +84,7 @@ OPTIONS_KEYWORDS = [
     "option", "options", "gamma", "gex", "put wall", "call wall", "gamma flip",
     "zero gamma", "implied volatility", "skew", "dealer", "vix",
 ]
-SUPPLY_CHAIN_KEYWORDS = ["ai", "semiconductor", "chip", "power", "cooling", "hbm", "optical", "supply", "asic", "accelerator", "光模块", "cpo", "算力", "先进封装", "高速互联"]
+SUPPLY_CHAIN_KEYWORDS = ["ai", "semiconductor", "chip", "power", "cooling", "hbm", "optical", "supply", "asic", "accelerator", "光模块", "cpo", "算力", "先进封装", "高速互联", "soxx", "smh", "半导体背离", "semis divergence", "费城半导体"]
 EARLY_STAGE_KEYWORDS = ["early", "early-stage", "emerging", "nascent", "prototype", "pre-revenue", "萌芽", "导入初期", "早期", "新兴技术", "产业化初期", "还没放量", "小票"]
 # Real deleveraging/systemic-stress semantics only. Do NOT add bare entity/option
 # words here (tickers, commodities, vol-index names, options jargon) — a lone
@@ -179,6 +194,118 @@ def apply_overrides(weights: dict[str, int], overrides: dict[str, bool]) -> dict
     return out
 
 
+def _risk_snapshot_path() -> Path:
+    state_root = Path(
+        os.environ.get("TRADING_RESEARCH_STATE_DIR")
+        or (Path.home() / ".cache" / "hermes" / "trading-research")
+    )
+    return state_root / "risk_regime" / "current.json"
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def load_current_risk_snapshot(
+    *,
+    snapshot_json: str | None = None,
+    path: Path | None = None,
+    now: datetime | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """Load a current-session snapshot first, otherwise the local current file.
+
+    Invalid, future, stale, or non-local-day snapshots fail open to the original
+    method weights. An explicit session payload never falls back to an older cache.
+    """
+    source = "session_snapshot" if snapshot_json is not None else "cached_current"
+    audit: dict[str, Any] = {
+        "applied": False,
+        "status": "missing",
+        "source": source,
+        "risk_regime": None,
+        "tightened_methods": {},
+    }
+    try:
+        if snapshot_json is not None:
+            payload = json.loads(snapshot_json)
+        else:
+            snapshot_path = path or _risk_snapshot_path()
+            if not snapshot_path.is_file():
+                return None, audit
+            payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        audit["status"] = "invalid"
+        return None, audit
+
+    if not isinstance(payload, dict) or payload.get("schema_version") != RISK_SNAPSHOT_SCHEMA:
+        audit["status"] = "invalid"
+        return None, audit
+    generated_at = _parse_timestamp(payload.get("generated_at"))
+    stale_after = _parse_timestamp(payload.get("stale_after"))
+    evaluated_at = now or datetime.now(timezone.utc)
+    if evaluated_at.tzinfo is None:
+        evaluated_at = evaluated_at.replace(tzinfo=timezone.utc)
+    else:
+        evaluated_at = evaluated_at.astimezone(timezone.utc)
+    expected_date = evaluated_at.astimezone(LOCAL_TIMEZONE).date().isoformat()
+    snapshot_date = payload.get("snapshot_date")
+    if (
+        generated_at is None
+        or stale_after is None
+        or generated_at > evaluated_at
+        or stale_after <= generated_at
+        or evaluated_at >= stale_after
+        or snapshot_date != expected_date
+    ):
+        audit["status"] = "stale" if generated_at is not None and stale_after is not None else "invalid"
+        return None, audit
+
+    regime = payload.get("risk_regime")
+    if not isinstance(regime, str) or not regime.strip():
+        audit["status"] = "invalid"
+        return None, audit
+    audit["status"] = "current"
+    audit["risk_regime"] = regime
+    return payload, audit
+
+
+def apply_risk_regime_tightening(
+    weights: dict[str, int],
+    snapshot: dict[str, Any] | None,
+    audit: dict[str, Any],
+) -> tuple[dict[str, int], dict[str, Any]]:
+    out = dict(weights)
+    result_audit = dict(audit)
+    regime = snapshot.get("risk_regime") if snapshot else None
+    if regime not in SEVERE_RISK_REGIMES:
+        if snapshot is not None:
+            result_audit["status"] = "not_severe"
+        return out, result_audit
+
+    tightened: dict[str, dict[str, int]] = {}
+    for method in OFFENSIVE_METHODS:
+        before = out.get(method, 0)
+        after = min(before, BASE["US_deleveraging"][method])
+        out[method] = after
+        if after < before:
+            tightened[method] = {"raw_before": before, "raw_after": after}
+    result_audit.update({
+        "applied": True,
+        "status": "applied",
+        "risk_regime": regime,
+        "tightened_methods": tightened,
+    })
+    return out, result_audit
+
+
 def top_weights(weights: dict[str, int], n: int = 5) -> list[tuple[str, int]]:
     return sorted(weights.items(), key=lambda kv: kv[1], reverse=True)[:n]
 
@@ -191,6 +318,10 @@ if __name__ == "__main__":
     ap.add_argument("--event", action="store_true")
     ap.add_argument("--options-heavy", action="store_true")
     ap.add_argument("--macro-policy", action="store_true")
+    ap.add_argument(
+        "--risk-snapshot-json",
+        help="validated current-session risk_regime_snapshot.v1 JSON; overrides cached current.json",
+    )
     ap.add_argument("--matrix-markdown", action="store_true", help="render the runtime raw-score matrix used in documentation")
     args = ap.parse_args()
     if args.matrix_markdown:
@@ -199,11 +330,15 @@ if __name__ == "__main__":
     scenario = choose(args.market, args.horizon, args.theme, args.event, args.options_heavy)
     macro = has_macro_policy_context(args.theme, args.macro_policy)
     overrides = detect_method_overrides(args.theme)
-    weights = normalize(apply_overrides(overlay(BASE[scenario], macro), overrides))
+    raw_weights = apply_overrides(overlay(BASE[scenario], macro), overrides)
+    risk_snapshot, risk_audit = load_current_risk_snapshot(snapshot_json=args.risk_snapshot_json)
+    raw_weights, risk_audit = apply_risk_regime_tightening(raw_weights, risk_snapshot, risk_audit)
+    weights = normalize(raw_weights)
     print(json.dumps({
         "scenario": scenario,
         "macro_policy_context": macro,
         "method_overrides": overrides,
+        "risk_regime_hook": risk_audit,
         "weights": weights,
         "top_weights": top_weights(weights),
     }, ensure_ascii=False, indent=2))

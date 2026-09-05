@@ -1,6 +1,6 @@
 # Bottleneck Scorecard · 瓶颈评分卡
 
-> 蒸馏自 serenity-skill 公开方法论，整合刘备估值维度。用于量化评估单个标的的研究优先级。
+> 参考 serenity-skill 公开方法论，整合刘备估值维度。用于量化评估单个标的的研究优先级。
 
 ## 概述
 

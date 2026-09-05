@@ -101,6 +101,9 @@ System B 分析框架/风控规则 → references + scripts → System A 决策 
 - System A 生成的学习包必须带 `schema_version`，当前唯一自动接收版本：`paper_learning_packet.v2`。
 - `paper_learning_packet.v1` 及任何缺失/未知版本只能作为人工历史参考，不进入自动 materiality/conflict gate。
 - System B 先验证版本，再读取 summary、materiality 或 upgrade candidates；schema mismatch 必须 fail-closed 并标注 `packet_schema_mismatch`，不得尽力解析。
+- v2 内的 `learning_evidence` 当前接收 `paper_learning_evidence.v1`。`scripts/paper_learning_consumer.py` 核对 `paper_failure_candidate.v1` 的candidate hash与真实已完成lifecycle IDs，输出 `paper_learning_consumption.v1`；未知R、未来完成、重复/错配ID不计有效证据。结构化版本错误不得退回legacy候选绕门。
+- `enough_for_trading_research_skill_upgrade` 与30样本sizing门分离；可支持方法复查，不给资金、Compiler阈值或订单权限。费用与原预测不完整的样本不进净概率校准。
+- `self_optimization_ledger.py append --from <check JSON>` 沿用每日账本，追加packet、candidate_id、真实样本集合hash、新增IDs及处置原因；锁内重算去重。相同证据重复调度、只改OOS时间或policy hash不算新独立样本。`reviewed_watch`是已做确定性triage且仍待证，不能冒称技能改进完成。
 
 ### Trade Lifecycle Contract
 
@@ -153,8 +156,8 @@ System B 分析框架/风控规则 → references + scripts → System A 决策 
 
 只有满足以下条件之一，才允许升级 `trading-research`：
 
-1. 至少 5 笔关闭交易暴露出同一类判断缺陷或有效规则。
-2. 至少 20 笔关闭交易支持仓位/风控规则调整。
+1. 至少 5 笔已知且有限R的完整生命周期满足研究入口门，并有上游可复核失败候选；具体失败模式继续遵守其样本门。
+2. sizing资格继续要求同一策略至少30个有效真实生命周期；它不代替研究升级门，也不授予System B自动改资金权限。
 3. 某个数据源/skill/MCP 连续多次证明有效或噪音极大，有明确归因。
 4. 新规则能被现有 Evidence Gate / Decision Compiler 接纳，且不冲突。
 5. 能写成通用方法，而不是一次性个案补丁。
@@ -162,8 +165,10 @@ System B 分析框架/风控规则 → references + scripts → System A 决策 
 ### 升级流程
 
 ```text
-learning_packet → materiality gate → conflict check → skill-quality-gate audit → patch trading-research → run validation/audit → update source map/version
+learning_packet → structured evidence + novelty receipt → research materiality → reproducible method mapping → baseline → bounded patch → validation/audit → version/readback
 ```
+
+结构化候选只得到可追踪的triage与待证原因。缺方法映射时保留 `awaiting_evidence`；已授权的小范围证据工具/方法测试修复有真实证据并通过验证时自主推进，不每轮重新征询。不得由未知映射硬造Compiler补丁或自动改golden真值。版本更新、受控验证与下一轮读取源码hash应分别留回执，不能用候选已生成代替发布完成。
 
 ### 禁止升级
 - 单笔成功交易。
@@ -186,9 +191,9 @@ learning_packet → materiality gate → conflict check → skill-quality-gate a
 
 ## Cron 分工
 
-- `LongBridge Demo Paper Learning Cycle` (`7b83f5ea92dd` + `327f90d45676`)：脚本型，静态 cron 拆成两段，只覆盖 US/HK/CN/SG 可能交易窗口：`7b83f5ea92dd` 负责 Asia/HK/CN 日盘与 US 晚间开盘窗口（`*/10 9-11,13-15,21-23 * * 1-5`），`327f90d45676` 负责 US 常规盘中国时间后半夜窗口（`*/10 0-5 * * 2-6`）。每次运行前再用 `~/.hermes/longbridge-paper-trading/scripts/market_session_guard.py` 调 LongBridge 官方 trading days 判断真实交易日与允许时段；非交易日/非交易时段静默退出。有动作或错误才通知。10 分钟是默认平衡点：比 30 分钟更适合持仓监控，又不会像 1-5 分钟那样制造过多 API/日志压力。
-- `LongBridge Demo Daily Intelligence Paper Decision Agent` (`0f3a23b24364`)：工作日 21:05 Asia/Shanghai，LLM 驱动，先由 `longbridge_paper_decision_market_guard.sh` 注入 US 官方交易日/预开盘窗口 guard；`allowed=false` 时必须立即停，不抓取、不写 proposal、不执行。`allowed=true` 时再抓取 X/web/news/MCP，执行完整 research → proposal → Demo paper execution → review 流程。该 agent 不得递归创建 cron。
-- `Trading Research Daily Self-Optimization` (`94cb8dfe1563`)：每天自检 `trading-research`，只在 materiality/conflict gate 通过后升级 skill。
+- 机械学习循环：由独立 System A 运行器按需要配置，先验证目标市场官方交易日和有效时段，再进行对账、持仓检查与学习包更新。非交易时段静默退出；频率由操作者配置。
+- 港美股日度研究：由独立运行器按各市场交易窗调度，核验真实自选与候选研究后再进入严格准入。未通过市场时间门时不得生成或执行订单；本 Skill 不安装调度任务。
+- 每日自检：外部调度调用本 Skill 自检入口，仅在证据与验证门通过后形成受控修改。
 
 ## 安全边界
 - 实盘永不自动下单。

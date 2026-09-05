@@ -20,6 +20,7 @@ When LongBridge-backed research needs portfolio-aware answers but runtime tools 
 
 Rules:
 - Do not skip auth failure silently. Trigger the login/renewal flow or mark `auth_gap`.
+- `scripts/longbridge_query.py` may retry **only** read-only `quote`/`kline` once when the CLI returns the observed `401003 token expired`: the retry removes inherited `LONGBRIDGE_*`/`LONGPORT_*` credentials so an already-valid CLI OAuth session can take over. It must not start login, retry unrelated failures, call account/order commands, or hide a second failure; if OAuth also fails, stop and record `auth_gap`.
 - Do not mix account data from one channel with market data from another without labels.
 - Do not invent missing fields. Missing broker/account context means no exact quantity recommendation.
 - If option chains fail but underlying quote works, preserve the partial data and route option structure via §3 below.
@@ -137,7 +138,7 @@ When a fallback chain touches more than one external source (LongBridge, CBOE, o
 
 1. Sources that never rate-limit/ban for normal single-symbol research queries go first.
 2. Rate-limited or key-required sources go after, and only when the free-tier source above them is unavailable or has a confirmed coverage gap.
-3. If the user or the task explicitly names a specific local/offline source, use it as specified — do not silently fall back to a network source instead, even if the network source would answer faster. Report the explicit-source failure instead of substituting silently.
+3. If 用户 or the task explicitly names a specific local/offline source, use it as specified — do not silently fall back to a network source instead, even if the network source would answer faster. Report the explicit-source failure instead of substituting silently.
 
 This is an ordering principle only; it does not change which sources are wired into any bridge script, and it does not touch `references/a-stock-data-source-layer.md`'s existing tencent/eastmoney/juchao/AkShare chain or `scripts/a_stock_data_bridge.py`.
 

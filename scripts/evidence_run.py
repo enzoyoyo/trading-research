@@ -518,9 +518,18 @@ def risk_regime_snapshot(identity: dict[str, Any], target: str, *, no_store: boo
 
 # ── method weights ─────────────────
 
-def method_weights(identity: dict[str, Any], target: str) -> dict[str, Any]:
+def method_weights(identity: dict[str, Any], target: str, risk_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     market = identity.get("market") if identity.get("market") in {"A", "HK", "US"} else "unknown"
     cmd = [sys.executable, str(SCRIPTS / "method_router.py"), "--market", market, "--theme", target]
+    if isinstance(risk_snapshot, dict):
+        session_snapshot = {
+            key: risk_snapshot.get(key)
+            for key in ("schema_version", "generated_at", "snapshot_date", "stale_after", "risk_regime")
+        }
+        cmd.extend([
+            "--risk-snapshot-json",
+            json.dumps(session_snapshot, ensure_ascii=False, separators=(",", ":")),
+        ])
     res = run_cmd(cmd, timeout=10)
     return parse_json(res.get("stdout", "")) if res.get("status") == "pass" else {"ok": False, "raw": summarize_json(res)}
 
@@ -744,7 +753,7 @@ def main() -> int:
     evidence.extend(fund_evidence)
     gaps.extend(fund_gaps)
 
-    methods = method_weights(identity, args.target)
+    methods = method_weights(identity, args.target, regime_snapshot)
 
     provenance_evidence = fund_evidence if identity.get("market") == "US" else []
     red_flags = build_red_flags(regime_snapshot, gaps, provenance_evidence)

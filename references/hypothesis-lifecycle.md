@@ -25,8 +25,10 @@ Decision Compiler directly and never changes `max_action_level` or
 The skill directory only contains the script. Runtime data goes to:
 
 - Registry file: `~/.cache/hermes/trading-research/memory/hypotheses.json`
+- Latest factor verdict: `~/.cache/hermes/trading-research/factor-verdicts/latest.json`
 
-Environment override: `TRADING_RESEARCH_HYPOTHESES_PATH`.
+Environment overrides: `TRADING_RESEARCH_HYPOTHESES_PATH` and
+`FACTOR_VERDICT_DIR` (the latter contains `latest.json`).
 
 Writes are atomic (`tempfile` + `os.replace`), so a crash mid-write cannot
 leave a truncated or corrupt registry.
@@ -48,8 +50,20 @@ python3 scripts/hypothesis_registry.py link-evidence --id hyp_... \
 python3 scripts/hypothesis_registry.py list --status train_only
 python3 scripts/hypothesis_registry.py search --query "随机对照"
 python3 scripts/hypothesis_registry.py stale --days 30
+python3 scripts/hypothesis_registry.py reconcile
+python3 scripts/hypothesis_registry.py reconcile --verdict /path/to/factor-verdict.json
 python3 scripts/hypothesis_registry.py --self-test
 ```
+
+`reconcile` is strictly read-only. It compares the most recent
+`factor_verdict.v1` artifact with active factor-verdict records. A differing
+four-state result is listed under `drift`; a registry factor absent from that
+single latest verdict is listed under `no_recent_evidence` and is not called
+drift. A matched verdict with `state: null` is reported as `not_judgeable`.
+Generic macro/event/narrative hypotheses are excluded. Matching prefers the
+registered `hypothesis_id`, then `reconciliation_key`, then the legacy
+`factor=...;market=...;horizon=...` statement identity. Duplicate matches are
+reported as `ambiguous`; no status is ever auto-updated.
 
 ## Status enum
 
@@ -81,6 +95,9 @@ null/random baseline or an OOS split.
   "source_module": "quant_robustness",
   "tags": ["factor_x", "quant_robustness"],
   "evidence_ids": ["decision:D123", "report:factor_x_run1"],
+  "falsifiers": ["next rolling OOS factor_x/5 alpha_t < 3.5"],
+  "reconciliation_key": "A|factor_x|5",
+  "record_type": "factor_verdict",
   "notes": [{"at": "2026-07-06T06:00:00Z", "text": "registered pending random-control test"}],
   "created_at_utc": "2026-07-06T06:00:00Z",
   "updated_at_utc": "2026-07-06T06:05:00Z"
@@ -106,5 +123,8 @@ note. A hypothesis is never silently dropped by simply not looking at it.
   confirmed_alive` moves a hypothesis out of hypothesis/watch, and even then
   it must re-enter the Decision Compiler as its own `module_signal` — the
   registry cannot raise `max_action_level` or `position_multiplier` by itself.
+- No automatic repair: `reconcile` only reports `drift`,
+  `no_recent_evidence`, ambiguity, and non-judgeable evidence. It does not
+  write the registry, write a verdict, or choose a replacement status.
 - Tighten-only: this ledger only adds tracking discipline; it never widens
   any cap defined in `decision-compiler.md`'s Cap & Tighten-Only Registry.

@@ -1,5 +1,7 @@
 # Earnings Call & Guidance Interpretation
 
+> 主落点声明：编译进 `fundamentals`；事件窗口与证据完整度仍由下文的次级模块收紧。
+
 ## 适用场景
 
 用户提供财报电话会 transcript/纪要，或问「这次指引是好是坏」「管理层这句话什么意思」「这次电话会有没有释放信号」。不适用于纯数字财报解读（走 `fundamental_snapshot.py` 与既有 `fundamentals` 主线）——本文件只覆盖**电话会文本本身**的结构化解读。

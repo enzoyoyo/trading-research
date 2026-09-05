@@ -1,7 +1,7 @@
 ---
 name: trading-research
 description: Use when the user asks for A/H/US stock, OKX public/read-only or tokenized-stock research, sector, macro, quant/backtest, options/Gamma, ETF, earnings-call, rates/FX/crypto overlay, A-share derivatives, Grok/X/web live signals, portfolio risk, execution supervision, or skill maintenance that must turn evidence into risk-bounded decisions without order execution.
-version: v2.59
+version: v2.71
 ---
 
 # trading-research
@@ -21,14 +21,16 @@ version: v2.59
 任何 tier 都保留 `no_order_execution`、数据时间戳、缺口标注、刷新条件；Tier 0 只省略研究管线，不省略安全边界。三个 tier 的主回复格式见 `templates/universal-equity-report.md`。
 
 ## 固定流程
+0a. **Strategy Mandate（US）**：先固定 symbol/strategy/horizon/instrument，按 `references/us-strategy-campaign.md` 与 `scripts/strategy_orchestrator.py` 封闭本次研究问题集。全局风险门始终保留，防守期间继续发现机会；每个分支分别编译。不得把 discovery-only 的排序/情景输出混成可执行信号，也不得静默删除已经提交的真实约束。计划本身没有动作权限。
 0. **Participant Flow 第一性检查**：谁是边际买卖双方、信念多强、什么改变他们逻辑；`references/participant-flow-motivation.md`。
 1. **Cognitive Fork**：新兴主题先拆投资命题；`references/theme-cognitive-fork.md`。
 2. **Resolve**：识别叙事链路、时间线、资产联动、市场成熟度。
 2a. **Venue/Product Identity Gate**：涉及 OKX 时，先按 `references/okx-research-execution-supervision.md` 区分 CEX / Unified Tokenized Stocks / Wallet / DEX / Agent Trade Kit，核验 `instId` 或 chain/token identity、产品状态和地区资格；未知即 fail-closed。
 3. **Decision Memory Preflight**：读同标的/同方向历史约束（`references/trading-decision-memory.md`）。因子/信号类结论先查 `scripts/hypothesis_registry.py search/list` 避免重复造已否证假设；产出新的因子/信号类结论（`open`/`train_only`/`noise`/`reversed_strict`/`confirmed_alive`）时必须 `hypothesis_registry.py create`（新结论）或 `update`（改判已登记的）登记，不得报告一次后失踪；`references/hypothesis-lifecycle.md`。
 4. **Event Reaction Memory**：事件驱动/共动先验用 `scripts/event_reaction_journal.py` + `scripts/relationship_graph.py` 登记，不自动改仓位。
+4a. **US Mechanism Research**：侧击错价、类似状态路径、期权表达或跨标的对冲，必须按 `references/us-mechanism-research.md` 调用实际计算器；`scripts/us_mechanism_research.py` 保留事件前模型、价格条件路径、期权组合各自的证据与期限，嵌套缺口向上合并。只登记方法或hypothesis不算能力已执行。bundle不合成胜率/授予权限；如进入模拟盘，入口冻结研究链接并沿原成交/净费用链归因，禁止事后给旧交易补归功。
 5. **Evidence + Research Chain**：Tier 2 强制按 `宏观→行业→公司→情绪→资金结构→机会` 逐层输出 `state/as_of/evidence_ids/data_gaps/implication`；缺层、过期或冲突只允许降级，不得由后层分数越级抬仓。L1+ 结论至少 3 个独立 EID（与 `references/evidence-ladder.md` 晋级硬规则、`scripts/validate_report.py` 门槛一致），优先 LongBridge/公告/财报/交易所/监管/可复现行情数据。美股公司证据按底层 `source_family` 计独立性：LongBridge 与 SEC 直连命中同一 accession 仍只有一个 SEC 事实源；未知底层来源不计独立票。
-6. **Source Provenance Guard**：外部原文、方法论蒸馏、直接引文或言行对照必须生成 `research_provenance.v1` 并跑 `scripts/provenance_guard.py`；`partial` 最高 L1，`blocked` 最高 L0 且不得写入已接受 claim；KOL 方法蒸馏用同一 bundle 的 `kol_method_cards`。
+6. **Source Provenance Guard**：外部原文、方法论方法研究、直接引文或言行对照必须生成 `research_provenance.v1` 并跑 `scripts/provenance_guard.py`；`partial` 最高 L1，`blocked` 最高 L0 且不得写入已接受 claim；KOL 方法方法研究用同一 bundle 的 `kol_method_cards`。
 7. **Mira Quality Gate**：正式或可行动结论必须有 `readiness_level`、`stale_after`、`must_refresh_if`、claim-level posture；`references/mira-quality-gates.md`。
 8. **Decision Chain + Compiler**：先走 `机会→评分→概率→风险→计划`。强制填写 `consensus_view/price_discounts/variant_view`、至少 3 条带观察指标的 premortem、默认 `risk_posture=neutral`、可结算概率合同与触发/失效/`no_trade_if`；未知概率不得伪造。最终动作由 `references/decision-compiler.md` + `scripts/decision_compiler.py` 裁决。`scripts/entry_score.py` 只提供可解释展示分，`scripts/okx_execution_supervisor.py` 只提供现有 modules 的监督约束，两者都不能替代 Compiler。US 短周期请求先编译不可变的上游方向/动作上限，再由 short-cycle overlay 生成只收紧的执行窗约束；underlying 与 option branch 分别重编译。L1+ 可执行结论必须 record-decision；可结算概率另用 `scripts/prediction_ledger.py` 登记，主回复写 `write_status` 与 `completeness`，缺状态行会被 `scripts/validate_report.py` 拒绝。用户明确授权 OKX Demo 时，只能输出 `okx_demo_research_bundle.v1` 给独立 `~/.hermes/okx-demo-trading`；外部引擎必须重放 SHA-256 固定的 EntryScore/Decision 编译器，本 Skill 仍不调用交易接口。
 9. **Report Style**：主回复默认简洁决策版，结论先行；完整账本进文件/附录。格式唯一权威是 `templates/universal-equity-report.md`（Tier 0 直答 / Tier 1 速判 / Tier 2 单票·组合·多标的模板、表格纪律、闭环状态披露、附录触发条件），本文件不再重复格式细节。
@@ -38,12 +40,13 @@ version: v2.59
 按域分组；每行「用途 → 文件」。references/ 与 scripts/ 前缀省略。
 
 ### 数据与行情
-- 公开配置加载与安全状态检查（仅环境变量/示例配置，不回显密钥）→ `config_loader.py`
+- 公开配置加载与安全状态检查（不回显密钥）→ `config_loader.py`
 - LongBridge 主数据层（行情/财报/估值/监管申报/Form 4/股东/显式机构 13F/组合/期权/新闻）与免费 SEC EDGAR 缺口兜底 → `data-source-playbook.md`；`longbridge_query.py`、`us_company_evidence.py`、`security_resolver.py`（标的解析）、`market_router.py`（市场路由）、`fundamental_snapshot.py`
 - A 股公开源补强（腾讯/东财/巨潮）与备用交叉验证 → `a-stock-data-source-layer.md`、`windclaw-a-share-bridge.md`、`a-share-short-term-layer.md`；`a_stock_data_bridge.py`、`windclaw_bridge.py`
+- 同花顺官方 Financial-API（A 股代码/报价/日线/估值/三张财报/历史交易日；仅补证，逐行时间缺失不得当实时）→ `financial-api-data-source.md`；`financial_api_bridge.py`、`test_financial_api_bridge.py`
 - A 股情绪周期专项（涨跌停生态/连板梯队/板块扩散/情绪阶段/资金流状态；仅 A 股短线按需加载）→ `a-share-sentiment-cycle.md`；`a_share_sentiment_cycle.py`
 - 通用数据新鲜度与交易日护栏（as-of 对齐、周末降级、缺失降级）→ `data_freshness_guard.py`
-- 市场结构与风险快照（Gamma/VRP、拥挤/离散度、去杠杆、risk_regime）→ `options-gamma-structure.md`、`leverage-crowding-dispersion-playbook.md`、`deleveraging-liquidity-squeeze-playbook.md`；`options_gamma.py`、`dispersion_crowding.py`、`market_structure.py`、`risk_regime_snapshot.py`
+- 市场结构与风险快照（Gamma/VRP、拥挤/离散度、去杠杆、risk_regime）→ `options-gamma-structure.md`、`leverage-crowding-dispersion-playbook.md`、`deleveraging-liquidity-squeeze-playbook.md`、`semis-index-divergence-overlay.md`；`options_gamma.py`、`dispersion_crowding.py`、`market_structure.py`、`risk_regime_snapshot.py`、`semis_divergence.py`
 - MCP/CLI/SDK/公开源降级链、期权链 delayed fallback、账户门 → `runtime-fallbacks.md`
 - OKX CEX/Wallet/DEX/Agent Trade Kit 边界、Unified Tokenized Stocks 身份核验、公共盘口/K线快照 → `okx-research-execution-supervision.md`；`okx_public_snapshot.py`
 
@@ -73,10 +76,17 @@ version: v2.59
 - 模拟仓请求先证明不是实盘 → `longbridge-paper-trading-gate.md`
 - 本次主导方法选择，主回复只露 Top 5 → `method-rotation-matrix.md`；`method_router.py`
 - Tier 2 研究管线入口 → `research_run.py`
+- 美股策略分账、进攻/防守持续搜索、重新进入、完整请求审计与阻断归因 → `us-strategy-campaign.md`；`strategy_orchestrator.py`、`test_strategy_orchestrator.py`
+- 通用方法研究种子（独立样本、时钟与成本契约；默认 train_only）→ `templates/research-method-seeds.json`。种子不提供预测胜率或执行权限。
+- 美股侧击/条件路径/期权表达实际计算与同一版本研究合同 → `us-mechanism-research.md`；`us_mechanism_research.py`、`test_us_mechanism_research.py`。System A只读面板展示研究、候选、持仓与真实反馈，风险门单项未阻断不代表可开仓。
 - OKX 策略心跳、feed freshness、持仓/订单/成交对账、last-good stale 与暂停建议；Demo 可显式使用 ≤30 秒 REST polling read-only projection，live 仍强制 private WS → `okx-research-execution-supervision.md`；`okx_execution_supervisor.py`
 - 本地只读监督面板（30 秒相对路径刷新、ET、移动端、无订单/参数控件）；独立 companion server 只增加急停与只读状态问答 → `okx-research-execution-supervision.md`；`okx_monitor_dashboard.py`
 
 ### 场景与方法框架
+- 事件经济关系与事件前冻结partial OLS、扣除大盘共动后的额外偏离 → `event-dislocation.md`；`event_dislocation.py`、`test_event_dislocation.py`。前瞻事件回归估计器尚未实现；相关性和z不得转成因果/回归概率，补样本不会自动启用该能力。
+- 历史状态条件路径、触达/终值/修复时间、双尾、经验区间锥与滚动评分 → `conditional-path-study.md`；`conditional_path_study.py`、`test_conditional_path_study.py`。缓存回放不是事前校准；日线h=1仍不是close-to-open。
+- 单腿/价差/蝶式自然成本、精确到期收益、隔日估值、个股期权+SPX联合压力 → `options-expression-lab.md`；`options_expression_lab.py`、`test_options_expression_lab.py`。情景不等概率，蝶式不保证降低组合尾损。
+- Gamma flip按假设spot重算全链、call+/put−持仓方向假设、方法迁移隔离 → `gamma-model-semantics.md`；`options_gamma.py`、`risk_regime_snapshot.py`、`test_gamma_model_semantics.py`、`test_gamma_risk_semantics.py`。旧strike累计交叉不再冒充flip，不按价格在根哪侧臆断正负Gamma。
 - 参与者流/主题分叉/早期质量/社媒-技术入场门 → `participant-flow-motivation.md`、`theme-cognitive-fork.md`、`early-stage-theme-quality-framework.md`、`social-technical-entry-gate.md`
 - 供应链 X 光/瓶颈评分/Serenity → `supply-chain-xray-playbook.md`、`serenity-method.md`、`bottleneck-scorecard.md`；`serenity_scorecard.py`
 - 五维评分/预期收益/流动性-估值对偶/领先指标 → `multi-factor-evidence-synthesis.md`、`expected-returns-framework.md`、`liquidity-valuation-duality.md`、`leading-indicators-framework.md`
@@ -87,6 +97,8 @@ version: v2.59
 - 港股离岸市场生存框架（港股标的/恒科/南向/高股息港股/港股ETF）→ `hk-offshore-market-playbook.md`
 - 债券利率/FX 宏观 overlay 与 BTC/ETH 主流币框架 → `rates-fx-crypto-overlay.md`
 - A 股 ETF 期权/可转债/打新 → `a-share-derivatives-ipo.md`
+- A 股日内盘口微观结构信号库（OrderWall/OrderImbalance/Ignition/Spoofing/WallBreaker/LimitLeak/TD九转；经济逻辑、失效场景、保真度警示，全部 `train_only` 起步，`snapshot_diff` 四信号永久锁定不得晋级）→ `a-share-intraday-microstructure-strategies.md`（逐信号精确公式锚点见 `formulas/` 目录）；`microstructure_signals.py`
+- 盘口快照+分钟 OHLCV → LLM 研判打包（强制 bar_ref/tick_ref 证据引用，防幻觉，仅供研究判断不映射动作等级）→ `templates/intraday-snapshot-to-llm.md`
 - 美股隔夜执行窗与横截面排序（只降级/排序/提 watch priority）→ `us-close-to-open-execution-overlay.md`、`overnight-ensemble-ranker.md`
 - 短周期结构层（09:40 连续性、SPX gamma、期权执行质量、EOD 复盘调权；只判当日可执行性）→ `short-cycle-market-structure-overlay.md`；`short_cycle_structure.py`、`short_cycle_signals.py`、`short_cycle_review.py`
 - 第三方期权 flow 告警/sweep 截图 → `options-flow-sweep-gate.md`
@@ -114,12 +126,15 @@ version: v2.59
 - 数据轻量化/归档清理 → `data-retention-policy.md`；`data_retention.py`
 
 ### 自优化与回归
-- 每日自检、自进化、护栏候选、周学习摘要、闭环活性监控 → `adaptive-self-optimization.md`；`self_optimization_check.py`、`self_optimization_ledger.py`、`learning_digest.py`、`eval_candidate_generator.py`
+- 每日自检、自进化、护栏候选、周学习摘要、闭环活性监控 → `adaptive-self-optimization.md`；`self_optimization_check.py`、`paper_learning_consumer.py`、`self_optimization_ledger.py`、`learning_digest.py`、`eval_candidate_generator.py`
 - 场景/输出回归与发布验证 → `scenario-regression-tests.md`；`validate_skill.py`、`validate_scenarios.py`、`validate_report.py`、`output_quality_regression.py`、`release_validation_runner.py`
 - 方法论来源追溯与外部仓审计笔记 → `source-map.md`、`vnpy-audit-notes.md`
 
 ## 决策约束
 - 风控先于观点：`risk_regime`、forced liquidation、liquidity squeeze、账户合法性、Gamma hard veto 覆盖静态分数。
+- System A 的 quant/beta/日度研究新仓必须重放本 Skill 的 strict Compiler；candidate、展示分、自签 verified 或仅 hash 某个桥接文件均不构成权限。原始 proposal、policy、风险快照、主 Compiler hash 需绑定并在 executor 再核验，风险倍率必须实际约束数量；旧信封不得复用。具体操作在 System A `docs/runbooks/canonical-research-admission.md`。
+- 预测缺失与交易计划缺失分开。不得为满足表格/登记完整性生成固定公式胜率；无诚实概率时 `probability=null`、不进入概率校准。确定性策略仍需完整证据/风险/成本/退出计划和主 Compiler 许可；Decision Memory 如因缺概率为 partial，必须明示该项且不得把它说成可校准预测。其余缺口仍按原门阻断。
+- 纸面概率只接受入口事前冻结合同和完整生命周期净成本结算凭证。历史 `win_rate_proxy` 样本保留但隔离；真实交易、反事实、预测校准分别计数。相同生命周期集合重复被 cron 观察，不得算新增独立失败证据。
 - 缺口不脑补：源缺失、视觉信号不可复核、派生计算无公式/`calculation_ref`，必须降级并写入 DataGap/Conflict Ledger。
 - 来源能力与本次证据分开：`unsupported/auth_missing/rate_limited/error/stale/missing` 不能改写成 0、无事件或负面事实；多标的补抓按 criticality round-robin。
 - 分层溯源：direct quote 需本地 hash+行锚点；framework inference 不得冒充原话；反证未检查或引用链失败时最高 L0，不得污染 Decision Memory。
@@ -142,7 +157,7 @@ version: v2.59
 每次需要出网的研究查询，必须将 AnySearch 与 LongBridge/交易所/公司IR/`web_search`/Grok/`multi_source_search.py` 同批联动运行，不能以任一主源成功为由跳过；纯本地计算、用户给定材料只读分析、Tier 0 取已有行情值除外。finance/social_media 等垂直意图先 `get_sub_domains` 发现子域再追加垂直检索。
 
 ```bash
-ANYSEARCH="${ANYSEARCH_BIN:-anysearch}"   # install on PATH or set ANYSEARCH_BIN
+ANYSEARCH="python3 ${HOME}/.agents/skills/anysearch/scripts/anysearch_cli.py"   # 先读 runtime.conf
 $ANYSEARCH batch_search --queries '[{"query":"<公开查询>","max_results":5},{"query":"<公开查询>","domain":"finance","sub_domain":"<sub>","sub_domain_params":"<k=v>"}]'
 $ANYSEARCH extract "<publisher-url>"   # 只对候选原文回抓
 ```
@@ -152,6 +167,8 @@ $ANYSEARCH extract "<publisher-url>"   # 只对候选原文回抓
 - 每个查询包记录 `provider=anysearch`、查询、domain、时间、结果数、错误状态与后续原文 URL；连续两次失败停止本轮并记独立 DataGap，不影响其他联动源。
 
 ## Multica 可选单向协作
+
+用户当次显式指定模型/思考档位时优先于以下历史默认分工。先核验可用标识，保留请求模型、请求 effort、返回模型/供应商、退出码与错误回执；不支持的档位不得静默换档后宣称已按要求调用。模型建议不是市场证据，必须经本地源码/原始来源/测试独立验证。
 
 普通 standalone 路径始终可独立完成，不得等待协作模型；只有任务明确选择 Multica 协作时才启用以下单向、可跳过的研究分工：
 
@@ -197,6 +214,8 @@ python3 scripts/factor_backtest.py --self-test
 python3 scripts/factor_verdict.py --self-test
 python3 scripts/premarket_screen.py --self-test
 python3 -m unittest discover -s scripts -p "test_factor*.py"
+python3 scripts/microstructure_signals.py --self-test
+python3 -m unittest discover -s scripts -p "test_microstructure_signals.py"
 python3 scripts/output_quality_regression.py
 python3 scripts/validate_skill.py
 python3 scripts/validate_scenarios.py
@@ -207,7 +226,7 @@ python3 scripts/okx_public_snapshot.py XMU-USDT --site eea
 python3 scripts/okx_public_snapshot.py XSKHY-USDT --site eea
 ```
 
-维护纪律：不新增真实下单路径；不递归改 cron；paper bucket 只读且 `materiality_eligible=false`；封顶值只在 Decision Compiler Cap Registry 改；golden set 先人工确认再并入；SKILL.md 能力地图必须覆盖全部 references/scripts（`validate_skill.py` reachability 检查强制）。
+维护纪律：不新增真实下单路径；不递归改 cron；paper bucket 只读且 `materiality_eligible=false`；封顶值只在 Decision Compiler Cap Registry 改；golden set 先人工确认再并入；SKILL.md 能力地图必须覆盖全部 references/scripts（`validate_skill.py` reachability 检查强制）；任何维护/发布"完成"声明前必须 git status --porcelain 为空或显式列出未提交增量，并核对 CHANGELOG 与 frontmatter version 已同步 bump；release-candidate/delegation 评审树（含 manifest.json）一律只读，探针脚本只写 scratch；在候选根目录内做任何写操作前必须重读其 review_contract。
 
 Paper 校准闭环 pitfall：`paired_samples=0` 不等于「完成」。三种状态分开：1）无预测字段 = 数据链未打通；2）有预测未平仓 = 写 `calibration_pending_paper_predictions` 并在 scorecard 暴露 `paper_pending_predictions`；3）有预测已平仓 = 写 `calibration_samples_paper` 算 Brier。只有第 2 种可作为客观限制；不得为验收捏造预测概率或 outcome。
 
@@ -215,3 +234,4 @@ Paper 校准闭环 pitfall：`paired_samples=0` 不等于「完成」。三种�
 - `trading-research` 是统一投研主 skill；本 skill 无子 skill 目录，Claude Code 只注册顶层本文件。
 - 新能力优先并入 `references/*`、`scripts/*`、`templates/*`，不得新增第二套动作等级或绕过主流程，也不得新建嵌套 `SKILL.md`。
 - System A（LongBridge paper-trading 自动化）的运维 runbook 在 `~/.hermes/longbridge-paper-trading/docs/runbooks/`，不在本 skill 目录内维护。
+- 历史变更见 `README.md`；执行规则以本文件、对应 references、scripts 为准。

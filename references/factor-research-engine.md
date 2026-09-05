@@ -27,6 +27,8 @@
 | `range_pos_252` | `(close - min(low,252)) / (max(high,252) - min(low,252))` | `+` | 252 | true |
 | `amihud_20` | `mean(abs(daily_ret)/amount, 20)` | `research` | 21 | true |
 
+`direction_hypothesis="-"` 的因子自 v2.64 起按假设方向取向后对称裁决；v2.64 之前的 `"-"` 因子历史裁决存在按假设应验时仍只能落入 `noise` 的已知偏置。
+
 注册表只含 OHLCV 与换手率可复现的价量因子。股息类、无 PIT 财务因子不进入 Phase A。`range_pos_252` 注册为 `default_enabled=false` / `explicit_long_window_only`：它不进入 `--factors all`，只能显式请求并先抓取独立长窗。其余 7 个因子组成默认集合。机器可读全表由：
 
 ```bash
@@ -66,6 +68,7 @@ CLI 直接接受上述文档名；兼容短别名 `size` / `size_sector`，内�
 
 - `ransac_winsorize`：异常时可能吞错返回原数据，违反 fail-closed。
 - RF/GBDT/KRR 等 ML 中性化：同截面 fit-predict 易把过拟合伪装成净化。
+- **「候选信号 + ML 二次筛选」两段式架构**：本系统的第二段（`factor-validation-strict-gate` 的同宇宙随机对照 + 固定 `T=3.5` + 四态裁决）已经就是二次筛选，且是无参数的。换成有参数的拟合器不构成增量，反而在 `n_factors_scanned` 覆盖不到的地方（模型族/特征集/超参网格）新增一层未计数的搜索——校正后的 `alpha_t` 看起来仍然合规，过拟合却已发生。另有两条结构性封死：`decision_compiler.py:93-95` 令 `quant_robustness` 下 `train_only/noise/reversed_strict` 的 `position_multiplier=0.0`（新信号一律 `train_only` 起步，故 ML 分数进 Compiler 必乘 0）；`factor_verdict.py` 硬编码 `decision_use <= ranking_support`（无 CLI 逃逸），产出天花板与现有整数投票同级。**只吸收其纪律**：因子有效性必须做条件分层检验，实现方式为在既有随机对照框架内显式分箱重跑（`factor_backtest.py --condition-by`），分箱数计入 `n_factors_scanned`，分箱结论只降级不晋级。
 - AlphaPurify 原 `Exposures` 归因：未来收益方向错误，不复用。
 - 独立 `trace()`、Arrow mmap、多进程、Plotly 报表：在 ≤100 标的小宇宙下没有必要，增加维护面。
 - 任何 `except: return original_data`：异常必须转成结构化 `data_gaps` 或非零退出。
@@ -78,27 +81,62 @@ CLI 直接接受上述文档名；兼容短别名 `size` / `size_sector`，内�
 
 ### 5.2 随机对照
 
-随机对照必须在同一交易日、同一有效股票截面内置换已算好的因子秩向量：
+执行器注册两种可复现 null：
 
-- 每截面预排名一次；每次置换只做 O(n) 点积。
-- `random_ic_mean`：置换试验级 mean IC 的均值。
+- `cross_section_shuffle`：同一交易日、同一有效股票截面内独立置换已算好的因子秩向量。
+- `circular_rotation`：对每个标的的因子秩时间序列独立抽偏移 `k` 并循环平移，前向收益原位不动，再逐日重排横截面秩。每个标的独立抽 `k`；允许区间固定为 `2<=k<=T-2`，排除 `0/1/T-1` 退化旋转。它保留标的内序列持续性，只破坏因子与收益的时点对齐。
+
+两种实现由同一个 `factor_engine.evaluate_observations()` kernel 提供；
+`factor_backtest.py --condition-by` 复用该 kernel，不维护第二套 null。当前默认仍是
+`cross_section_shuffle`：只有 ≥30 标的真实缓存对比中，每个可比因子×horizon 都同时满足
+`circular random_ic_std > shuffle random_ic_std`、`circular alpha_t <= shuffle alpha_t`，
+并且至少一条既有 `confirmed_alive` 明确降级，才允许把默认切到
+`circular_rotation`。对比不可运行、任一不变量失败或四态变化清单为空，都保持旧默认。
+
+- `random_ic_mean`：试验级 mean IC 的均值；`random_ic_std` 是同一试验分布的样本标准差。
 - 对 h 日前向收益，先固定从首个有效截面开始按 `stride=h` 取非重叠截面，再计算 `alpha_t = (mean_real_ic - mean(trial_mean_ics)) / stdev(trial_mean_ics)`；h=1 保持逐日截面。
 - 分母分布是“每次试验跨截面的均值 IC 分布”，不是单截面 IC，也不是相对 0 的 t 检验。
 - 输出同时披露 `raw_section_count`、`effective_sections`、`section_stride`；`min_dates` 按 `effective_sections` 计数，不足即 `insufficient_data`。
 - `n_factors_scanned` 是本次真实检验数 `因子数×horizon 数`，禁止手填。
 - `T=3.5` 固定，不随本次族规模动态调整；`n_factors_scanned` 仅作多重检验披露，不得声称已做 Bonferroni/Holm/族规模自适应校正。
-- `seed` 必须显式落盘；同 seed、同输入、同参数应产生相同结果。
+- `null_kind`、`seed`、`trials` 必须显式落盘；循环旋转还必须在 `null_audit` 持久化标的顺序、每标的 offset 合法边界与逐试验 `offsets_by_trial`。同输入、同参数、同 seed 必须产生相同结果。
+- 面板逐标的记录 `panel_source`。同一标的历史一旦含多个来源，该标的只从随机对照退出、真实 IC 路径不删除，并记录 `cross_source_symbol_history_excluded_from_random_control`；退出后 null 截面不足仍 fail-closed。`qfq_rewrites_history` / `forward_adjust_rewrites_history` PIT caveat 不变。
+- `python3 scripts/factor_engine.py run ... --compare-nulls --json` 显式输出逐因子×horizon 的两种 `random_ic_std`/`alpha_t`、`state_changes`、`downgrades`、不变量及默认建议；不得用空清单冒充有效升级。
 
 裸 IC、裸 t>2、图上单调都不构成 alpha 证据。
+
+### 5.3 条件分层验证（只收紧）
+
+`factor_backtest.py` 可选 `--condition-by {vol_20_quintile,risk_regime}`；省略该参数时完全沿用原回测路径。条件值只取已登记且在形成日可得的变量：`vol_20_quintile` 使用全市场逐日 `vol_20` 中位数的滞后 1 个交易日值，并只用当时已知历史计算 expanding 五分位边界；`risk_regime` 使用 `risk_regime_snapshot.v1` 五态字符串的滞后 1 个交易日值。禁止用全样本边界、因子自身前向收益或任何未来信息分箱。
+
+- 研究轮次用 `--condition-factors` 与 `--condition-horizons` 预声明完整 family；`n_factors_scanned = factors × horizons × k`，五个条件箱令 `k=5`。固定阈值仍为 `T=3.5`，不得因分箱增加而放松。未显式声明 family 的单因子运行只能输出 pair-level 证据，不能据此拒绝整个条件维度。
+- 每个箱独立计算 `effective_sections`。任一箱 `< min_dates`（默认 40）即标记 `insufficient_sample`，不产出 verdict、不写 hypothesis；不得降低样本门槛补结论。
+- 条件结论只允许降级：全局 `confirmed_alive` 在某箱为 `noise`/`reversed_strict` 时，该箱降为 `train_only`；全局 `train_only` 即使某箱原始结果通过，也不得晋级。
+- 只有完整 family 中出现至少一个显式降级时才保留该条件维度，并对可裁决的每个「因子×条件箱」按 `train_only` 登记。hypothesis identity 固定为因子/条件/箱/horizon，不把会变化的四态写进 identity；falsifier 固定写明「下一轮滚动 OOS 中该分箱 `alpha_t < 3.5` 即降级」。只有完整 family 的全部箱均可裁决且零降级，才输出 `rejected_no_degradation`，不保留该维度、不写 registry；不可裁决或样本不足保持 pending。
+- 先按全局序列固定 `stride=h` 的非重叠截面日期，再在同一日期网格内切条件箱，防止分箱各自起步造成抽样相位差。输出持久化 `null_kind`、`seed`、`null_trials`、滞后期、expanding `boundaries_by_date`/五态枚举、逐日分箱映射与 section dates，保证可复现。条件验证复用 §5.2 的同一 `evaluate_observations()` kernel，不另建 null 或 Compiler 路径；既有 `quant_robustness/train_only = 0.0` cap 保持不变。
+
+离线快速检查与真实长窗研究命令：
+
+```bash
+python3 -m unittest scripts.test_factor_backtest
+TR_CONDITION_UNIVERSE=(SPY QQQ IWM DIA SOXX SMH XLK XLF XLE XLI XLV XLY XLP XLU XLB XLC XLRE XBI KRE TLT HYG GLD SLV USO AAPL MSFT NVDA AMZN META GOOGL)
+python3 scripts/factor_panel.py fetch --market US --symbols "${TR_CONDITION_UNIVERSE[@]}" --window-days 800 --source auto --json
+python3 scripts/factor_backtest.py run --market US --symbols "${TR_CONDITION_UNIVERSE[@]}" --factor mom_20_1 --condition-by vol_20_quintile --condition-factors mom_20_1 mom_60_5 rev_5 vol_20 turn_20 turn_ratio_5_60 amihud_20 --condition-horizons 1 --null circular_rotation --null-trials 100 --seed 42 --min-dates 40 --register-conditions --save --json
+python3 scripts/factor_backtest.py run --market US --symbols "${TR_CONDITION_UNIVERSE[@]}" --factor mom_20_1 --condition-by risk_regime --condition-factors mom_20_1 mom_60_5 rev_5 vol_20 turn_20 turn_ratio_5_60 amihud_20 --condition-horizons 1 --null circular_rotation --null-trials 100 --seed 42 --min-dates 40 --register-conditions --save --json
+```
+
+真实长窗若无可复现的逐日五态历史，`risk_regime` 分层必须 fail-closed；不得用当前快照回填历史。真实长窗回测不是本次升级的验收条件。
 
 ## 6. 四态规则
 
 阈值 `T=3.5` 写死，不提供单因子豁免：
 
-- `confirmed_alive`：train `alpha_t>=T` 且 test `alpha_t>=T`，并且 train/test `mean_ic` 同号。
-- `train_only`：train 过门、test 不过门。这是过拟合证据，不是“弱 alpha”。
-- `reversed_strict`：全样本与 test `alpha_t<=-T`，且实际 IC 方向与 `direction_hypothesis` 相反。
+- `confirmed_alive`：train/test `alpha_t` 按 `direction_hypothesis` 取向后均 `>=T`，并且 train/test `mean_ic` 同号。
+- `train_only`：train `alpha_t` 按 `direction_hypothesis` 取向后过门、test 取向后不过门。这是过拟合证据，不是“弱 alpha”。
+- `reversed_strict`：全样本与 test `alpha_t` 按 `direction_hypothesis` 取向后均 `<=-T`，且全样本与 test 的实际 IC 方向均与假设相反。
 - `noise`：其余。
+
+`direction_hypothesis="research"` 有意冻结为只允许原始正向 `alpha_t` 确认、永不产生 `reversed_strict`；不得把它顺手对称化。
 
 缺 `random_ic_mean`、`alpha_t` 或 `n_factors_scanned` 时不可裁决：`state=null`，readiness 封顶 `research_hypothesis`。
 
@@ -108,7 +146,7 @@ CLI 直接接受上述文档名；兼容短别名 `size` / `size_sector`，内�
 
 第一道是 Factor Validation Strict Gate：同宇宙随机对照、固定 3.5 披露门、train/test 四态。该固定门源自 factor-zoo 的严格门槛纪律，但不是按本次族规模动态校正。
 
-第二道是既有 Quant Robustness Gate：walk-forward、成本、容量、回撤、no-lookahead。`confirmed_alive` 不豁免第二道门；缺 backtest、`costs_included!="yes"`、缺 train/test 分段或 OOS `test.periods<3` 时，记 `missing_walk_forward`，`decision_use` 强制为 `hypothesis_only`。train/test 切分只按可结算的 `ls_returns` 长度计算，不按 formation epoch 数错切。
+第二道是既有 Quant Robustness Gate：walk-forward、成本、容量、回撤、no-lookahead。`confirmed_alive` 不豁免第二道门；缺 backtest、`costs_included!="yes"`、缺 train/test 分段或 OOS `test.periods<3` 时，记 `missing_walk_forward`，`decision_use` 强制为 `hypothesis_only`。OOS `test.sharpe <= 0`（含成本）记 `oos_net_sharpe_nonpositive`，`decision_use` 强制为 `hypothesis_only`；0 为符号边界非可调参数。train/test 切分只按可结算的 `ls_returns` 长度计算，不按 formation epoch 数错切。
 
 ### 7.2 不可放开的天花板
 
@@ -121,8 +159,8 @@ CLI 直接接受上述文档名；兼容短别名 `size` / `size_sector`，内�
 
 ## 8. 数据口径与 PIT 声明
 
-- 历史面板统一使用 AkShare qfq，并携带 `adjust_basis=qfq_snapshot_<fetch_date>`。
-- qfq 会在除权后重写历史；`pit_caveats` 必须包含 `qfq_rewrites_history`。短窗口与全窗重拉只保证内部一致，不解决严格 PIT lookahead。
+- A 股历史面板的 `auto` 链在东财健康门放行后使用 AkShare em→sina qfq 备源链；HK `auto` 链为 LongBridge forward → 健康的 AkShare em qfq → 新浪 qfq，并分别携带对应 `adjust_basis`；US `auto` 链先尝试 AkShare qfq，失败时可走已注册的 LongBridge forward 复权备源。
+- qfq/forward 都会在公司行动后重写历史；`pit_caveats` 必须分别包含 `qfq_rewrites_history` / `forward_adjust_rewrites_history`。短窗口与全窗重拉只保证内部一致，不解决严格 PIT lookahead。
 - 宇宙为当前存续标的列表；`pit_caveats` 必须包含 `survivorship_current_constituents`。
 - A/HK 无 point-in-time 财务数据前，不做财务因子；股息敏感因子除名。
 - 停复牌自然缺行必须被计数和声明。
@@ -133,11 +171,11 @@ CLI 直接接受上述文档名；兼容短别名 `size` / `size_sector`，内�
 
 ## 9. 限流纪律
 
-批量历史面板只走 AkShare，不使用 LongBridge：
+A 股批量历史面板只走健康门后的 AkShare em→sina qfq 备源链；HK `factor_panel --source auto` 先走 LongBridge forward，失败后才走健康的 AkShare em→sina qfq 链；US 可在既有 `factor_panel --source auto` 链使用 LongBridge forward 复权备源。不得为条件分层新增其他数据源：
 
 横截面研究/部署宇宙必须至少 30 只，建议 50+ 以吸收 null 与 warm-up 损耗；8 只票 watchlist 按设计不能形成可部署 rank，`ranking_unavailable` 是正确的 fail-closed 结果，不是抓取故障。
 
-- 串行请求，相邻调用默认至少 1.5 秒。
+- A/HK AkShare 串行请求，相邻调用默认至少 1.5 秒；单次最多 100 标的。
 - 单标的失败最多重试一次，之后立即记缺口。
 - 默认单次最多 100 标的，不得悄悄扩大。
 - `factor_panel fetch` 默认窗口为 800 个自然日。按 245 交易日/年约得 537 行，可覆盖默认因子集合在 `h=1,5,10`、`min_dates=40` 下最严格的约 476 行需求，并保留余量。

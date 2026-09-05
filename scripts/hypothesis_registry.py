@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hypothesis lifecycle registry for trading-research.
 
-Persistent create/update/search ledger for research hypotheses so a factor or
+Persistent create/update/search/reconcile ledger for research hypotheses so a factor or
 market claim that lands on train_only/noise/reversed_strict (see
 references/factor-validation-strict-gate.md) keeps being tracked instead of
 disappearing after being reported dead. Runtime data is stored under
@@ -22,12 +22,19 @@ from typing import Any
 
 DEFAULT_PATH = Path.home() / ".cache" / "hermes" / "trading-research" / "memory" / "hypotheses.json"
 ENV_PATH = "TRADING_RESEARCH_HYPOTHESES_PATH"
+DEFAULT_VERDICT_PATH = Path.home() / ".cache" / "hermes" / "trading-research" / "factor-verdicts" / "latest.json"
+ENV_VERDICT_DIR = "FACTOR_VERDICT_DIR"
 STATUSES = {"open", "confirmed_alive", "train_only", "reversed_strict", "noise", "retired"}
 DEFAULT_STALE_DAYS = 30
 
 
 def registry_path() -> Path:
     return Path(os.environ.get(ENV_PATH) or DEFAULT_PATH)
+
+
+def latest_verdict_path() -> Path:
+    override = os.environ.get(ENV_VERDICT_DIR)
+    return Path(override).expanduser() / "latest.json" if override else DEFAULT_VERDICT_PATH
 
 
 def utc_now() -> str:
@@ -84,6 +91,10 @@ def find(rows: list[dict[str, Any]], hypothesis_id: str) -> dict[str, Any] | Non
     return None
 
 
+def clean_strings(values: list[str] | None) -> list[str]:
+    return sorted({value.strip() for value in (values or []) if isinstance(value, str) and value.strip()})
+
+
 def create_hypothesis(
     rows: list[dict[str, Any]],
     *,
@@ -93,6 +104,9 @@ def create_hypothesis(
     source_module: str | None = None,
     note: str | None = None,
     evidence_ids: list[str] | None = None,
+    falsifiers: list[str] | None = None,
+    reconciliation_key: str | None = None,
+    record_type: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if not statement:
         raise SystemExit("create requires --statement (or payload.statement)")
@@ -106,6 +120,9 @@ def create_hypothesis(
         "source_module": source_module,
         "tags": sorted(set(tags or [])),
         "evidence_ids": sorted(set(evidence_ids or [])),
+        "falsifiers": clean_strings(falsifiers),
+        "reconciliation_key": reconciliation_key.strip() if isinstance(reconciliation_key, str) and reconciliation_key.strip() else None,
+        "record_type": record_type.strip() if isinstance(record_type, str) and record_type.strip() else None,
         "notes": [{"at": now, "text": note or "created"}],
         "created_at_utc": now,
         "updated_at_utc": now,
@@ -120,6 +137,9 @@ def update_hypothesis(
     status: str | None = None,
     tags: list[str] | None = None,
     note: str | None = None,
+    falsifiers: list[str] | None = None,
+    reconciliation_key: str | None = None,
+    record_type: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     target = find(rows, hypothesis_id)
     if target is None:
@@ -131,6 +151,17 @@ def update_hypothesis(
         **target,
         "status": status or target["status"],
         "tags": sorted(set(target.get("tags") or []) | set(tags or [])),
+        "falsifiers": clean_strings(list(target.get("falsifiers") or []) + list(falsifiers or [])),
+        "reconciliation_key": (
+            reconciliation_key.strip()
+            if isinstance(reconciliation_key, str) and reconciliation_key.strip()
+            else target.get("reconciliation_key")
+        ),
+        "record_type": (
+            record_type.strip()
+            if isinstance(record_type, str) and record_type.strip()
+            else target.get("record_type")
+        ),
         "notes": (target.get("notes") or []) + ([{"at": now, "text": note}] if note else []),
         "updated_at_utc": now,
     }
@@ -196,6 +227,126 @@ def stale_hypotheses(rows: list[dict[str, Any]], days: int) -> list[dict[str, An
     return out
 
 
+def _legacy_factor_identity(statement: Any) -> str | None:
+    """Recover market|factor|horizon from pre-reconciliation factor records."""
+    if not isinstance(statement, str) or not statement.startswith("factor="):
+        return None
+    fields: dict[str, str] = {}
+    for item in statement.split(";"):
+        key, separator, value = item.partition("=")
+        if separator and key and value:
+            fields[key.strip()] = value.strip()
+    if not all(fields.get(key) for key in ("market", "factor", "horizon")):
+        return None
+    return f"{fields['market']}|{fields['factor']}|{fields['horizon']}"
+
+
+def _factor_record(row: dict[str, Any]) -> bool:
+    return bool(
+        row.get("record_type") == "factor_verdict"
+        or (isinstance(row.get("reconciliation_key"), str) and row.get("reconciliation_key", "").strip())
+        or _legacy_factor_identity(row.get("statement"))
+    )
+
+
+def _verdict_identity(verdict: dict[str, Any]) -> str | None:
+    explicit = verdict.get("reconciliation_key")
+    if isinstance(explicit, str) and explicit.strip():
+        return explicit.strip()
+    market, factor, horizon = verdict.get("market"), verdict.get("factor"), verdict.get("horizon_id")
+    if all(isinstance(value, str) and value.strip() for value in (market, factor, horizon)):
+        return f"{market.strip()}|{factor.strip()}|{horizon.strip()}"
+    return None
+
+
+def _registered_hypothesis_id(verdict: dict[str, Any]) -> str | None:
+    registration = verdict.get("registration")
+    hypothesis = registration.get("hypothesis") if isinstance(registration, dict) else None
+    hypothesis_id = hypothesis.get("hypothesis_id") if isinstance(hypothesis, dict) else None
+    return hypothesis_id.strip() if isinstance(hypothesis_id, str) and hypothesis_id.strip() else None
+
+
+def reconcile_registry(
+    rows: list[dict[str, Any]], verdict: dict[str, Any] | None, *, verdict_path: Path | None = None
+) -> dict[str, Any]:
+    """Compare the latest factor verdict to factor records without mutating rows."""
+    active_factor_rows = [row for row in rows if row.get("status") != "retired" and _factor_record(row)]
+    result: dict[str, Any] = {
+        "ok": True,
+        "status": "reconciled" if verdict is not None else "no_verdict_artifact",
+        "read_only": True,
+        "no_order_execution": True,
+        "verdict_path": str(verdict_path) if verdict_path is not None else None,
+        "factor_record_count": len(active_factor_rows),
+        "excluded_non_factor_count": len([row for row in rows if row.get("status") != "retired" and not _factor_record(row)]),
+        "compared_count": 0,
+        "drift_count": 0,
+        "no_recent_evidence_count": 0,
+        "not_judgeable_count": 0,
+        "drift": [],
+        "no_recent_evidence": [],
+        "not_judgeable": [],
+        "ambiguous": [],
+    }
+
+    matched: list[dict[str, Any]] = []
+    if verdict is not None:
+        hypothesis_id = _registered_hypothesis_id(verdict)
+        if hypothesis_id:
+            matched = [row for row in active_factor_rows if row.get("hypothesis_id") == hypothesis_id]
+        if not matched:
+            verdict_key = _verdict_identity(verdict)
+            if verdict_key:
+                matched = [
+                    row for row in active_factor_rows
+                    if isinstance(row.get("reconciliation_key"), str)
+                    and row.get("reconciliation_key", "").strip() == verdict_key
+                ]
+                if not matched:
+                    matched = [row for row in active_factor_rows if _legacy_factor_identity(row.get("statement")) == verdict_key]
+
+    if len(matched) > 1:
+        result["ambiguous"] = [
+            {"hypothesis_id": row.get("hypothesis_id"), "status": row.get("status"), "statement": row.get("statement")}
+            for row in matched
+        ]
+        matched = []
+
+    matched_ids = {id(row) for row in matched}
+    for row in active_factor_rows:
+        if id(row) not in matched_ids:
+            result["no_recent_evidence"].append({
+                "hypothesis_id": row.get("hypothesis_id"),
+                "registry_status": row.get("status"),
+                "reconciliation_key": row.get("reconciliation_key") or _legacy_factor_identity(row.get("statement")),
+                "reason": "latest_verdict_has_no_corresponding_factor",
+            })
+
+    if matched:
+        row = matched[0]
+        result["compared_count"] = 1
+        state = verdict.get("state") if isinstance(verdict, dict) else None
+        if state is None:
+            result["not_judgeable"].append({
+                "hypothesis_id": row.get("hypothesis_id"),
+                "registry_status": row.get("status"),
+                "verdict_status": verdict.get("status"),
+                "reason": "latest_verdict_not_judgeable",
+            })
+        elif state != row.get("status"):
+            result["drift"].append({
+                "hypothesis_id": row.get("hypothesis_id"),
+                "registry_status": row.get("status"),
+                "latest_verdict_state": state,
+                "reconciliation_key": _verdict_identity(verdict),
+            })
+
+    result["drift_count"] = len(result["drift"])
+    result["no_recent_evidence_count"] = len(result["no_recent_evidence"])
+    result["not_judgeable_count"] = len(result["not_judgeable"])
+    return result
+
+
 def print_json(payload: dict[str, Any]) -> int:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
@@ -213,6 +364,9 @@ def cmd_create(args: argparse.Namespace) -> int:
         source_module=args.source_module or payload.get("source_module"),
         note=args.note or payload.get("note"),
         evidence_ids=payload.get("evidence_ids"),
+        falsifiers=args.falsifier or payload.get("falsifiers"),
+        reconciliation_key=args.reconciliation_key or payload.get("reconciliation_key"),
+        record_type=args.record_type or payload.get("record_type"),
     )
     save_registry(path, new_rows)
     return print_json({"ok": True, "status": "created", "hypothesis": row, "registry_path": str(path)})
@@ -221,7 +375,10 @@ def cmd_create(args: argparse.Namespace) -> int:
 def cmd_update(args: argparse.Namespace) -> int:
     path = registry_path()
     rows = load_registry(path)
-    new_rows, row = update_hypothesis(rows, args.id, status=args.status, tags=args.tag, note=args.note)
+    new_rows, row = update_hypothesis(
+        rows, args.id, status=args.status, tags=args.tag, note=args.note,
+        falsifiers=args.falsifier, reconciliation_key=args.reconciliation_key, record_type=args.record_type,
+    )
     save_registry(path, new_rows)
     return print_json({"ok": True, "status": "updated", "hypothesis": row, "registry_path": str(path)})
 
@@ -252,8 +409,24 @@ def cmd_stale(args: argparse.Namespace) -> int:
     return print_json({"ok": True, "count": len(stale), "stale_after_days": args.days, "hypotheses": stale, "registry_path": str(path)})
 
 
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    path = registry_path()
+    verdict_path = Path(args.verdict).expanduser() if args.verdict else latest_verdict_path()
+    verdict = _load_verdict(verdict_path) if verdict_path.exists() else None
+    result = reconcile_registry(load_registry(path), verdict, verdict_path=verdict_path)
+    result["registry_path"] = str(path)
+    return print_json(result)
+
+
+def _load_verdict(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("schema_version") != "factor_verdict.v1":
+        raise ValueError(f"factor_verdict.v1 JSON object required: {path}")
+    return payload
+
+
 def self_test() -> dict[str, Any]:
-    """Exercise create/update/link-evidence/list/search/stale against a
+    """Exercise lifecycle operations and read-only reconciliation against a
     throwaway registry file under tempfile; never reads or writes the real
     ~/.cache/hermes/trading-research/memory/hypotheses.json."""
     with tempfile.TemporaryDirectory() as td:
@@ -266,9 +439,13 @@ def self_test() -> dict[str, Any]:
             tags=["factor_x", "quant_robustness"],
             source_module="quant_robustness",
             note="registered pending random-control test",
+            falsifiers=["next rolling OOS alpha_t < 3.5"],
+            reconciliation_key="A|factor_x|5",
+            record_type="factor_verdict",
         )
         save_registry(path, rows)
         assert len(rows) == 1 and created["status"] == "open", created
+        assert created["falsifiers"] == ["next rolling OOS alpha_t < 3.5"], created
 
         rows = load_registry(path)
         rows, updated = update_hypothesis(
@@ -299,6 +476,26 @@ def self_test() -> dict[str, Any]:
         save_registry(path, retired_rows)
         assert not stale_hypotheses(load_registry(path), DEFAULT_STALE_DAYS), retired_rows
 
+        # Reconcile is evidence-only: matching, drift and absent-factor states
+        # are visible, while registry bytes remain unchanged.
+        active_rows = [{**old_rows[0], "status": "train_only"}]
+        generic_rows, generic = create_hypothesis(
+            active_rows, statement="macro inflation thesis", status="open", source_module="macro_policy"
+        )
+        save_registry(path, generic_rows)
+        before = path.read_bytes()
+        verdict = {
+            "schema_version": "factor_verdict.v1", "market": "A", "factor": "factor_x",
+            "horizon_id": "5", "reconciliation_key": "A|factor_x|5", "state": "confirmed_alive",
+        }
+        reconciled = reconcile_registry(load_registry(path), verdict, verdict_path=Path("latest.json"))
+        assert reconciled["drift_count"] == 1, reconciled
+        assert reconciled["excluded_non_factor_count"] == 1, reconciled
+        assert path.read_bytes() == before, "reconcile mutated registry"
+        absent = reconcile_registry(load_registry(path), {**verdict, "factor": "factor_y", "reconciliation_key": "A|factor_y|5"})
+        assert absent["drift_count"] == 0 and absent["no_recent_evidence_count"] == 1, absent
+        assert generic["hypothesis_id"] not in {item["hypothesis_id"] for item in absent["no_recent_evidence"]}, absent
+
         return {"ok": True, "self_test": "passed", "hypothesis_id": created["hypothesis_id"], "final_status": updated["status"]}
 
 
@@ -314,6 +511,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_create.add_argument("--source-module")
     p_create.add_argument("--note")
     p_create.add_argument("--payload", help="JSON payload path; CLI flags override payload fields")
+    p_create.add_argument("--falsifier", action="append")
+    p_create.add_argument("--reconciliation-key")
+    p_create.add_argument("--record-type")
     p_create.set_defaults(func=cmd_create)
 
     p_update = sub.add_parser("update", help="change status/tags/notes on an existing hypothesis")
@@ -321,6 +521,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_update.add_argument("--status", choices=sorted(STATUSES))
     p_update.add_argument("--tag", action="append")
     p_update.add_argument("--note")
+    p_update.add_argument("--falsifier", action="append")
+    p_update.add_argument("--reconciliation-key")
+    p_update.add_argument("--record-type")
     p_update.set_defaults(func=cmd_update)
 
     p_link = sub.add_parser("link-evidence", help="attach evidence ids (decision/report/event) to a hypothesis")
@@ -340,6 +543,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_stale = sub.add_parser("stale", help="list non-retired hypotheses untouched for N days")
     p_stale.add_argument("--days", type=int, default=DEFAULT_STALE_DAYS)
     p_stale.set_defaults(func=cmd_stale)
+
+    p_reconcile = sub.add_parser("reconcile", help="read-only comparison of factor records to the latest factor verdict")
+    p_reconcile.add_argument("--verdict", help="factor_verdict.v1 path; defaults to FACTOR_VERDICT_DIR/latest.json")
+    p_reconcile.set_defaults(func=cmd_reconcile)
 
     return ap
 

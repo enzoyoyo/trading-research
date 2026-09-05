@@ -31,7 +31,7 @@ import math
 import os
 import re
 import urllib.request
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -58,7 +58,7 @@ def _parse_occ(option: str) -> tuple[str, str, float] | None:
     return exp, cp, int(strike_raw) / 1000.0
 
 
-# ── Black-Scholes 兜底（仅 yfinance 路径用）────────────────────────────
+# ── Black-Scholes 假设 spot profile 与 yfinance 兜底────────────────────────────
 def _norm_pdf(x: float) -> float:
     return math.exp(-0.5 * x * x) / SQRT_2PI
 
@@ -99,6 +99,71 @@ class GammaStructure:
     gamma_flip: float | None
     top_strikes: list[dict[str, Any]]
     notes: list[str]
+    gamma_flip_method: str = "hypothetical_spot_bs_gamma_v1"
+    gamma_flip_status: str = "unknown"
+    gamma_profile: dict[str, Any] = field(default_factory=dict)
+    legacy_strike_cumulative_crossing: float | None = None
+    dealer_sign_assumption: str = "assumed_dealer_sign_proxy_call_plus_put_minus"
+    observed_dealer_inventory: bool = False
+    direction_authority: bool = False
+    position_authority: bool = False
+
+
+@dataclass(frozen=True)
+class GammaContract:
+    strike: float
+    oi: float
+    iv: float
+    t_years: float
+    sign: int
+
+
+def _spot_gamma_profile(contracts: list[GammaContract], spot: float, rate: float) -> dict[str, Any]:
+    """Frozen IV/OI, q=0, 100-share proxy; roots require actual sign brackets."""
+    out: dict[str, Any] = {
+        "method": "hypothetical_spot_bs_gamma_v1", "status": "unknown",
+        "roots": [], "gamma_flip": None, "contract_count": len(contracts),
+        "rate": rate, "dividend_yield": 0.0, "contract_multiplier": 100,
+        "iv_assumption": "sticky_strike_frozen_iv", "time_basis": "calendar_days/365",
+        "search_bounds": [spot * 0.5, spot * 1.5], "grid_intervals": 400,
+        "root_selection": "nearest_to_observed_spot", "spot_net_gex": None,
+    }
+    valid = lambda x: isinstance(x, (int, float)) and math.isfinite(x) and x > 0
+    if not valid(spot) or not math.isfinite(rate) or not contracts:
+        out["reason"] = "missing_or_invalid_inputs"
+        return out
+    invalid = [c for c in contracts if not all(valid(v) for v in (c.strike, c.oi, c.iv, c.t_years)) or c.sign not in (-1, 1)]
+    if invalid:
+        out.update(reason="incomplete_chain_iv_or_expiry_time", invalid_contract_count=len(invalid))
+        return out
+    def value(x: float) -> float:
+        return math.fsum(c.sign * _bs_gamma(x, c.strike, c.t_years, c.iv, rate) * c.oi * x * x for c in contracts)
+    out["spot_net_gex"] = value(spot)
+    lo, hi = out["search_bounds"]
+    points = [(lo + (hi-lo)*i/400, value(lo + (hi-lo)*i/400)) for i in range(401)]
+    # Skip exact-zero grid values: they are roots only if adjacent nonzero values reverse sign.
+    nonzero = [(x,y) for x,y in points if y != 0]
+    roots = []
+    for (a, fa), (b, fb) in zip(nonzero, nonzero[1:]):
+        if (fa > 0) == (fb > 0):
+            continue
+        for _ in range(50):
+            mid = (a+b)/2
+            fm = value(mid)
+            if fm == 0:
+                a = b = mid
+                break
+            if (fm > 0) == (fa > 0):
+                a, fa = mid, fm
+            else:
+                b, fb = mid, fm
+        root = a if a == b else a - fa*(b-a)/(fb-fa)
+        roots.append(root)
+    if not roots:
+        out["reason"] = "no_sign_changing_root_in_search_range"
+        return out
+    out.update(status="modeled", roots=roots, gamma_flip=min(roots, key=lambda x: abs(x-spot)))
+    return out
 
 
 # ── 现价 ──────────────────────────────────────────────────────────────
@@ -142,7 +207,8 @@ def _resolve_target_expiry(
 
 # ── 主源：CBOE ────────────────────────────────────────────────────────
 def _collect_from_cboe(
-    symbol: str, max_days: int, expiry: str | None = None, near: bool = False
+    symbol: str, max_days: int, expiry: str | None = None, near: bool = False,
+    profile_contracts: list[GammaContract] | None = None,
 ) -> tuple[list[StrikeGex], list[str], float, list[str]] | None:
     """返回 (strikes, expirations, spot, notes)；取不到返回 None 让上层降级。
     expiry 指定时只聚合该到期日；near=True 时只聚合窗口内最近一个到期日（0DTE/近月视角）。"""
@@ -183,6 +249,8 @@ def _collect_from_cboe(
             continue
         oi = float(o.get("open_interest") or 0)
         gamma = float(o.get("gamma") or 0)
+        if oi > 0 and profile_contracts is not None:
+            profile_contracts.append(GammaContract(strike, oi, float(o.get("iv") or 0), days / 365.0, 1 if cp == "C" else -1))
         if oi <= 0 or gamma <= 0 or strike <= 0:
             continue
         used.add(exp)
@@ -211,6 +279,7 @@ def _collect_from_cboe(
 def _collect_from_yfinance(
     symbol: str, spot: float, max_days: int, rate: float,
     expiry: str | None = None, near: bool = False,
+    profile_contracts: list[GammaContract] | None = None,
 ) -> tuple[list[StrikeGex], list[str], list[str]]:
     import yfinance as yf
 
@@ -250,6 +319,8 @@ def _collect_from_yfinance(
                 strike = float(row.get("strike") or 0)
                 oi = int(row.get("openInterest") or 0)
                 iv = float(row.get("impliedVolatility") or 0)
+                if oi > 0 and profile_contracts is not None:
+                    profile_contracts.append(GammaContract(strike, oi, iv, days / 365.0, 1 if is_call else -1))
                 if strike <= 0 or oi <= 0 or iv <= 0:
                     continue
                 gamma = _bs_gamma(spot, strike, t_years, iv, rate)
@@ -276,12 +347,13 @@ def _collect_from_yfinance(
 def _find_walls(
     strikes: list[StrikeGex], spot: float
 ) -> tuple[float | None, float | None, float | None]:
+    """Return strike walls and legacy cumulative crossing; NOT a spot gamma root."""
     below = [s for s in strikes if s.strike < spot]
     above = [s for s in strikes if s.strike >= spot]
     put_wall = min(below, key=lambda s: s.net_gex).strike if below else None
     call_wall = max(above, key=lambda s: s.net_gex).strike if above else None
 
-    gamma_flip: float | None = None
+    legacy_strike_cumulative_crossing: float | None = None
     cumulative = 0.0
     prev_sign = 0
     prev_strike: float | None = None
@@ -289,12 +361,12 @@ def _find_walls(
         cumulative += s.net_gex
         sign = 1 if cumulative > 0 else (-1 if cumulative < 0 else 0)
         if prev_sign != 0 and sign != 0 and sign != prev_sign and prev_strike is not None:
-            gamma_flip = round((prev_strike + s.strike) / 2.0, 2)
+            legacy_strike_cumulative_crossing = round((prev_strike + s.strike) / 2.0, 2)
             break
         if sign != 0:
             prev_sign = sign
             prev_strike = s.strike
-    return put_wall, call_wall, gamma_flip
+    return put_wall, call_wall, legacy_strike_cumulative_crossing
 
 
 def analyze(
@@ -315,16 +387,18 @@ def analyze(
     spot = 0.0
     spot_source = "cboe"
 
-    cboe = _collect_from_cboe(symbol, max_days, expiry=expiry, near=near)
+    profile_contracts: list[GammaContract] = []
+    cboe = _collect_from_cboe(symbol, max_days, expiry=expiry, near=near, profile_contracts=profile_contracts)
     if cboe is not None:
         strikes, expirations, spot, cnotes = cboe
         notes.extend(cnotes)
     if not strikes:
+        profile_contracts.clear()
         source = "yfinance_bs"
         spot, spot_source = _spot_from_engine(symbol)
         if spot > 0:
             strikes, expirations, ynotes = _collect_from_yfinance(
-                symbol, spot, max_days, rate, expiry=expiry, near=near
+                symbol, spot, max_days, rate, expiry=expiry, near=near, profile_contracts=profile_contracts
             )
             notes.extend(ynotes)
         else:
@@ -345,7 +419,12 @@ def analyze(
 
     total = sum(s.net_gex for s in strikes)
     regime = "positive_gamma" if total >= 0 else "negative_gamma"
-    put_wall, call_wall, gamma_flip = _find_walls(strikes, spot)
+    put_wall, call_wall, legacy_crossing = _find_walls(strikes, spot)
+    profile = _spot_gamma_profile(profile_contracts, spot, rate)
+    gamma_flip = profile["gamma_flip"]
+    notes.append("OI call+ / put− 仅 assumed dealer-sign proxy；未观测做市商持仓，不授予方向或仓位权限。")
+    if profile["status"] == "unknown":
+        notes.append("Gamma flip unknown: " + profile["reason"])
     top = sorted(strikes, key=lambda s: abs(s.net_gex), reverse=True)[:8]
     top_strikes = [
         {
@@ -362,7 +441,8 @@ def analyze(
         spot_source=spot_source if source == "yfinance_bs" else "cboe",
         expirations_used=expirations, total_net_gex=round(total, 2), regime=regime,
         put_wall=put_wall, call_wall=call_wall, gamma_flip=gamma_flip,
-        top_strikes=top_strikes, notes=notes,
+        top_strikes=top_strikes, notes=notes, gamma_profile=profile,
+        gamma_flip_status=profile["status"], legacy_strike_cumulative_crossing=legacy_crossing,
     )
 
 
@@ -373,19 +453,13 @@ def _render_text(s: GammaStructure) -> str:
         "",
         f"总净 GEX：{s.total_net_gex/1e6:.1f} M$/1% ｜ 区间：{s.regime}",
     ]
-    if s.regime == "negative_gamma":
-        lines.append("  → 负 gamma 环境：波动放大、追跌助涨，**不接飞刀**；跌破 Put Wall 未收回不得激进接盘。")
-    elif s.regime == "positive_gamma":
-        lines.append("  → 正 gamma 环境：dealer 压波动，倾向区间震荡，回踩 Put Wall 接、冲 Call Wall 减。")
+    lines.append("  → GEX 符号为 OI 持仓方向假设下的代理值，不是观测到的做市商暴露。")
     lines += [
         "",
-        f"Put Wall（下方支撑）：{s.put_wall if s.put_wall is not None else '数据缺口'}",
-        f"Call Wall（上方阻力）：{s.call_wall if s.call_wall is not None else '数据缺口'}",
-        f"Gamma Flip（多空 gamma 翻转）：{s.gamma_flip if s.gamma_flip is not None else '数据缺口'}",
+        f"Put Wall（下方 strike 代理）：{s.put_wall if s.put_wall is not None else '数据缺口'}",
+        f"Call Wall（上方 strike 代理）：{s.call_wall if s.call_wall is not None else '数据缺口'}",
+        f"Gamma Flip（假设 spot 全链 BS 零点）：{s.gamma_flip if s.gamma_flip is not None else '数据缺口'}",
     ]
-    if s.gamma_flip is not None and s.spot > 0:
-        rel = "上方（当前处负 gamma 区）" if s.spot < s.gamma_flip else "下方（当前处正 gamma 区）"
-        lines.append(f"  → 现价位于 Flip {rel}")
     lines += ["", "Top GEX strikes（按 |净 GEX|）："]
     for t in s.top_strikes:
         lines.append(
@@ -402,7 +476,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="免费自算美股期权 Gamma 结构（CBOE 主源）")
     parser.add_argument("symbol", help="美股 ticker，如 AVGO/RKLB/MRVL")
     parser.add_argument("--max-days", type=int, default=45, help="纳入的到期日窗口（天），默认 45")
-    parser.add_argument("--rate", type=float, default=0.045, help="无风险利率（仅兜底 BS 用），默认 0.045")
+    parser.add_argument("--rate", type=float, default=0.045, help="无风险利率（假设 spot profile 与兜底 BS 用），默认 0.045")
     parser.add_argument("--expiry", type=str, default=None,
                         help="只看单一到期日 YYYY-MM-DD（日内/0DTE 视角，对应行情软件单到期日 Gamma 图）")
     parser.add_argument("--near", action="store_true",

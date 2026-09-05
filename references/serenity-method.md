@@ -1,6 +1,6 @@
 # Serenity Method · 产业链瓶颈框架（v2.0 完整版）
 
-> 蒸馏自 Serenity 公开方法论（@aleabitoreddit）+ serenity-skill 仓库。核心命题：AI 超级周期 = 一系列 supply bottleneck 的轮番爆发。**谁卡脖子，谁涨。**
+> 参考 Serenity 公开方法论（@aleabitoreddit）+ serenity-skill 仓库。核心命题：AI 超级周期 = 一系列 supply bottleneck 的轮番爆发。**谁卡脖子，谁涨。**
 >
 > 不找需求最强的公司，找**供给弹性最差**的环节。
 

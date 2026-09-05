@@ -1,5 +1,7 @@
 # trading-research
 
+**v2.71**
+
 [English](#english) · [中文](#中文)
 
 开源、**仅研究分析**的 Agent Skill：把多市场证据编译成可复现的风险边界与动作建议，**不提交实盘订单**。
@@ -23,7 +25,23 @@ An open-source, **research-only** agent skill that turns multi-market evidence i
 | 数据源过期或密钥缺失仍硬答 | 缺配置 / 缺证据 fail-closed；日志脱敏，不打印密钥 |
 | 研究工具误变成下单机器人 | 默认 `no_order_execution`；开源安全层拒绝实盘开关 |
 
-**v2.59 新增**：可复现因子研究/分位回测与盘前筛选、A 股情绪周期、财报期权定位/隐含波动分布和历史反应工具；全部保持 research-only。
+### v2.71 功能与优化
+
+| 能力 | 现在可以做什么 |
+|---|---|
+| 美股策略研究 | 按标的、策略、期限和工具分别研究趋势、突破、超卖收复、事件延续、防御相对强势与隔夜机会；防守期继续发现候选，重新入场需要新证据与重新裁决 |
+| 事件与条件路径 | 用事件前冻结的模型衡量扣除大盘共动后的额外偏离；计算相似价格状态下的终值、触达、双尾风险、修复时间和经验区间，并保留样本与数据截点 |
+| 期权与 Gamma | 比较单腿、价差、蝶式的自然买卖成本、到期收益与隔日估值，检查个股期权和 SPX 组合压力；Gamma Flip 按假设现价重算纳入的期权链，明确持仓方向假设与未知状态 |
+| 因子研究与风控 | 支持两种随机对照和使用滞后状态的条件分层；按预先登记的方向验证因子，阻止样本外净 Sharpe 非正的结果获得排序资格；风险倍率按同模块取最严格值、跨模块相乘聚合 |
+| 数据源与恢复 | 增加可选同花顺 Financial-API A 股只读适配；完善港美股日线备源、东财健康检查与冷却，以及 LongBridge 报价/K 线在特定令牌过期错误后的单次 OAuth 重试 |
+| A 股盘口与市场结构 | 提供七类盘口/分钟信号计算与证据引用模板，明确 tick 和快照差分的区别；新增半导体与指数背离风险研究。盘口信号默认仅作待验证研究 |
+| 模拟盘学习与校准 | 校验版本化学习包、失败候选与完整交易生命周期，在账本锁内去重；概率只接受事前冻结的合同及合格结果，披露有效样本数与可计算的弃权率，缺少完整候选集时标明缺口；区分方法复查和仓位调整资格 |
+
+研究计算、概率估计与交易权限分别核验。事件偏离不直接给出因果结论或回归胜率；日线路径不等于收盘到次日开盘；期权情景网格不代表已知概率。Gamma 的持仓方向是模型假设，数据缺失时保留未知。
+
+**倍率兼容说明**：同模块取最严格值可避免相关信号重复折减，因此同模块存在多条约束时，倍率可能高于旧版逐条相乘的结果；硬否决仍然优先。详见 [Decision Compiler](references/decision-compiler.md)。
+
+**港美股双系统对接**：本仓库是 System B，提供研究合同、校准工具和学习包消费接口，可与独立的 System A 港美股模拟交易运行层对接。System A 的行情调度、模拟订单执行、成交对账和运行面板不包含在此 Skill 包中，安装本仓库也不会配置交易账户或定时任务。学习候选需要证据与验证，不会自行修改 Compiler、资金权限或正式评测真值。接口见 [双系统架构](references/two-system-trading-architecture.md)。
 
 覆盖范围概览：A/H/美股、行业与宏观 overlay、ETF、期权/Gamma、OKX public/read-only 与 tokenized stock 研究、事件驱动、财报电话会、多源检索、模拟仓复盘辅助。
 
@@ -93,6 +111,13 @@ An open-source, **research-only** agent skill that turns multi-market evidence i
 | `scripts/factor_panel.py` / `factor_engine.py` / `factor_backtest.py` / `factor_verdict.py` | 因子面板、IC、分位回测与严格裁决 |
 | `scripts/premarket_screen.py` / `a_share_sentiment_cycle.py` / `data_freshness_guard.py` | 盘前筛选、A 股情绪周期与新鲜度护栏 |
 | `scripts/options_positioning_snapshot.py` / `earnings_move_history.py` / `earnings_implied_distribution.py` | 财报期权定位、历史反应与隐含分布 |
+| `scripts/strategy_orchestrator.py` | 美股策略/期限/工具分账、研究路径与原 Compiler 结果汇总 |
+| `scripts/us_mechanism_research.py` | 实际调用事件偏离、条件路径和期权表达计算器，输出版本化研究合同 |
+| `scripts/event_dislocation.py` / `conditional_path_study.py` / `options_expression_lab.py` | 事件前模型、历史价格条件路径与期权组合情景计算 |
+| `scripts/financial_api_bridge.py` | 同花顺 A 股代码、报价、日线、估值、财报和历史交易日，只读补证 |
+| `scripts/microstructure_signals.py` / `semis_divergence.py` | A 股盘口信号与半导体/指数背离研究 |
+| `scripts/paper_learning_consumer.py` / `self_optimization_ledger.py` | 学习包校验、候选复查与防重复计证的消费回执 |
+| `scripts/paper_outcome_calibration_feed.py` / `calibration_scorecard.py` | 独立模拟盘校准桶、事前概率核验、样本数与弃权率 |
 | `scripts/polymarket_signal.py` | 预测市场概率（只作 pricing prior） |
 | `scripts/decision_compiler.py` / `entry_score.py` / `validate_report.py` | 裁决、展示分、报告契约校验 |
 | `scripts/hypothesis_registry.py` / `prediction_ledger.py` / `trading_memory.py` | 假设/预测/决策记忆 |
@@ -112,6 +137,7 @@ An open-source, **research-only** agent skill that turns multi-market evidence i
 | `LONGBRIDGE_APP_KEY` / `LONGBRIDGE_APP_SECRET` / `LONGBRIDGE_ACCESS_TOKEN` | 同上 | 自动映射到 `LONGPORT_*` | 与上三选一命名风格即可 |
 | `VOLC_DOUBAO_SEARCH_API_KEY` | 火山引擎 / 豆包 Search Global | `multi_source_search` 带 key 备用搜索 | **可选**；仅主搜索失败/候选不足时触发 |
 | `SEC_EDGAR_IDENTITY` | 自拟联系身份字符串（SEC Fair Access 要求） | 访问 `data.sec.gov` / `www.sec.gov` | 要用 SEC 官方 API 时需要（免费，无商业 key） |
+| `FINANCIAL_API_KEY` | [同花顺 Financial-API](https://github.com/HiThink-Tech/Financial-API) 数据服务 | 可选 A 股只读适配器 | 可选；由环境或安全存储注入 |
 | `OKX_API_KEY` / `OKX_SECRET_KEY` / `OKX_PASSPHRASE` | [OKX API](https://www.okx.com/) 创建只读/Demo 密钥 | read_only/demo 监督投影 | **可选**；纯 `public` 快照不需要 |
 | `OKX_MODE` | 本地设置 | `public` / `read_only` / `demo` | 默认应按 `public`；本 Skill **拒绝实盘下单** |
 | `HERMES_BIN` / `HERMES_GROK_MODEL` / `HERMES_GROK_PROVIDER` | 安装 Hermes + 登录 xAI/OAuth | 实时情报 | 可选 |
@@ -133,6 +159,7 @@ An open-source, **research-only** agent skill that turns multi-market evidence i
 | LongBridge OpenAPI / CLI / MCP | `longbridge_query.py`、`us_company_evidence.py`、Hermes MCP | A/H/美行情、财报、filing、期权链、新闻等 | 要（OpenAPI/OAuth） |
 | SEC EDGAR 官方 | `us_company_evidence.py` → `data.sec.gov` / `www.sec.gov` | 美股申报、companyfacts、ticker→CIK | 仅需 `SEC_EDGAR_IDENTITY` |
 | AkShare（多背后接东财等） | `evidence_run.py`、`a_share_sentiment_cycle.py`、`fundamental_snapshot.py` | A/港/美公开行情、涨停/龙虎榜、资金流、利率等 | 通常无商业 key |
+| 同花顺 Financial-API | `financial_api_bridge.py`；A 股桥接显式 `--source financial_api` | A 股代码、报价、日线、估值、三张财报、历史交易日 | `FINANCIAL_API_KEY` |
 | 腾讯财经公开接口 | `a_stock_data_bridge.py` | A 股行情/估值字段 | 无 |
 | 东方财富公开接口 | `a_stock_data_bridge.py`（限流） | 板块归属、分钟资金流等 | 无（需限流） |
 | 巨潮资讯 CNINFO | `a_stock_data_bridge.py` | A 股公告 orgId/列表 | 无 |
@@ -148,6 +175,8 @@ An open-source, **research-only** agent skill that turns multi-market evidence i
 | FRED 等宏观交叉源 | 玩法文档引用（AkShare/web 组合） | 利率/美元指数核对 | 视具体接口 |
 
 不可用或未接入时：报告写 `unavailable` / `data_gap`，给一般仓位上限，**不得假装已抓取**。
+
+同花顺适配器保留供应商的缺失时钟、分页范围与披露日期缺口；请求成功不等于实时行情或完整回测样本。凭据配置、命令和口径见 [Financial-API 数据源说明](references/financial-api-data-source.md)。
 
 ### 怎么用
 
@@ -220,10 +249,6 @@ python3 -m unittest scripts.test_oss_safety -v
 - 密钥只走环境变量 / chmod 600 的 env 文件；日志应脱敏
 - 详见 `SECURITY.md`
 
-### 第三方方法论说明
-
-部分 playbook 记录了对上游项目（含 Apache-2.0 / AGPL-3.0）的 **clean-room 方法论**吸收，并标明 `methodology_only_no_code_copied`，拒绝迁移代码/Prompt。本仓库整体为 MIT。
-
 ### 许可证
 
 MIT — 见 `LICENSE`。
@@ -244,6 +269,24 @@ Research chats often produce long narratives without reproducible bounds: stale 
 | One-off answers that never get reviewed | Decision memory, hypothesis registry, prediction ledger, calibration loops |
 | Missing secrets / stale sources still sounding confident | Fail closed; redact secret-like log values |
 | Research helpers turning into order bots | Default `no_order_execution`; OSS safety layer rejects live-trading flags |
+
+### v2.71 capabilities and improvements
+
+| Capability | What is available |
+|---|---|
+| US strategy research | Separate trend, breakout, oversold reclaim, event follow-through, defensive relative strength, and overnight research by symbol, strategy, horizon, and instrument; keep discovering candidates in defensive regimes and require fresh evidence for re-entry |
+| Events and conditional paths | Measure deviations after controlling for broad-market moves with a model frozen before the event; calculate terminal outcomes, barrier touches, both tails, recovery times, and empirical intervals for similar price states, retaining sample and cutoff information |
+| Options and Gamma | Compare natural bid/ask costs, expiry payoffs, and next-day valuations for single legs, spreads, and butterflies; stress single-stock options together with SPX exposures; recalculate Gamma Flip across the included chain at hypothetical spot prices with explicit inventory assumptions and unknown states |
+| Factor validation and risk | Compare two randomized nulls, condition on lagged states, respect registered factor direction, and block ranking eligibility when out-of-sample net Sharpe is nonpositive; aggregate the tightest multiplier within each module, then multiply across modules |
+| Data access and recovery | Add an optional read-only Tonghuashun Financial-API adapter for A-shares; improve HK/US daily-bar fallbacks, Eastmoney health checks and cooldowns, and one OAuth retry for a specific expired-token error on LongBridge quote/kline reads |
+| A-share microstructure and market structure | Compute seven order-book/minute signals with evidence references and distinct tick versus snapshot-difference fidelity; add semiconductor/index divergence research. Microstructure signals start as unvalidated research |
+| Paper learning and calibration | Validate versioned learning packets, failure candidates, and completed trade lifecycles; deduplicate under the ledger lock; accept only frozen probability contracts and eligible outcomes for calibration, report evaluated samples and computable abstention rates, preserve gaps when the full candidate set is missing, and separate methodology review from sizing eligibility |
+
+Research calculations, probability estimates, and trading authority have separate checks. Event deviations do not establish causality or reversion probabilities; daily paths are not close-to-open forecasts; option scenario grids do not imply known probabilities. Gamma inventory signs are modeling assumptions, and missing inputs remain unknown.
+
+**Multiplier compatibility:** selecting the tightest value within a module avoids repeatedly discounting correlated signals. With multiple constraints in the same module, the resulting multiplier can be higher than under the previous per-signal multiplication. Hard vetoes still take precedence. See [Decision Compiler](references/decision-compiler.md).
+
+**HK/US two-system integration:** this repository is System B. It supplies research contracts, calibration tools, and learning-packet consumption interfaces for an independent System A paper-trading runtime. System A's market scheduling, paper-order execution, fill reconciliation, and runtime dashboard are not included in this skill package. Installing this repository does not configure a trading account or scheduled jobs. Learning candidates require evidence and validation; they do not automatically alter the Compiler, capital permissions, or golden evaluation cases. See [two-system architecture](references/two-system-trading-architecture.md).
 
 Scope overview: A/H/US equities, sector/macro overlays, ETFs, options/Gamma, OKX public/read-only and tokenized-stock research, event-driven flows, earnings calls, multi-source search, paper-trading review helpers.
 
@@ -310,6 +353,16 @@ Split by **runtime dependencies** vs **repo scripts**. You do not need every too
 | `scripts/okx_public_snapshot.py` | OKX public market snapshot |
 | `scripts/okx_execution_supervisor.py` | Analysis-only OKX supervision |
 | `scripts/options_gamma.py` / `dispersion_crowding.py` | CBOE structure / crowding |
+| `scripts/factor_panel.py` / `factor_engine.py` / `factor_backtest.py` / `factor_verdict.py` | Factor panels, randomized controls, backtests, and validation |
+| `scripts/premarket_screen.py` / `a_share_sentiment_cycle.py` / `data_freshness_guard.py` | Premarket screening, A-share sentiment, and freshness checks |
+| `scripts/options_positioning_snapshot.py` / `earnings_move_history.py` / `earnings_implied_distribution.py` | Earnings positioning, historical reactions, and implied distributions |
+| `scripts/strategy_orchestrator.py` | Strategy/horizon/instrument separation and original Compiler result aggregation |
+| `scripts/us_mechanism_research.py` | Invoke event, path, and option calculators in a versioned research contract |
+| `scripts/event_dislocation.py` / `conditional_path_study.py` / `options_expression_lab.py` | Pre-event models, historical conditional paths, and option scenarios |
+| `scripts/financial_api_bridge.py` | Read-only A-share symbols, quotes, daily bars, valuation, financials, and historical trading dates |
+| `scripts/microstructure_signals.py` / `semis_divergence.py` | A-share microstructure signals and semiconductor/index divergence |
+| `scripts/paper_learning_consumer.py` / `self_optimization_ledger.py` | Learning-packet validation, candidate triage, and deduplicated consumption receipts |
+| `scripts/paper_outcome_calibration_feed.py` / `calibration_scorecard.py` | Isolated paper calibration, frozen probability checks, sample counts, and abstention rates |
 | `scripts/polymarket_signal.py` | Prediction-market pricing prior |
 | `scripts/decision_compiler.py` / `entry_score.py` / `validate_report.py` | Decision, score, report contract |
 | Memory/ledger helpers (`hypothesis_registry.py`, `prediction_ledger.py`, …) | Persistence of research judgments |
@@ -328,6 +381,7 @@ Full capability map: `SKILL.md`. Data-source details: `references/data-source-pl
 | `LONGBRIDGE_APP_*` / `LONGBRIDGE_ACCESS_TOKEN` | same | auto-mapped to `LONGPORT_*` | alternate naming |
 | `VOLC_DOUBAO_SEARCH_API_KEY` | Volcengine / Doubao Search Global | keyed search backup | Optional |
 | `SEC_EDGAR_IDENTITY` | Your contact identity string (SEC Fair Access) | Official SEC HTTP access | Needed for SEC API (free; no commercial key) |
+| `FINANCIAL_API_KEY` | [Tonghuashun Financial-API](https://github.com/HiThink-Tech/Financial-API) data service | Optional A-share read-only adapter | Optional; inject via environment or secret storage |
 | `OKX_API_KEY` / `OKX_SECRET_KEY` / `OKX_PASSPHRASE` | OKX API (read-only/Demo) | non-public supervision inputs | Optional; public snapshot needs none |
 | `OKX_MODE` | local | `public` / `read_only` / `demo` | Prefer `public`; **no live orders** |
 | `HERMES_BIN` / `HERMES_GROK_*` | Hermes + xAI login | live intel | Optional |
@@ -348,6 +402,7 @@ Notes:
 | LongBridge OpenAPI / CLI / MCP | `longbridge_query.py`, `us_company_evidence.py`, Hermes MCP | A/H/US quotes, filings, options, news | Yes |
 | SEC EDGAR | `us_company_evidence.py` | US filings / companyfacts / ticker map | Identity string only |
 | AkShare | `evidence_run.py`, sentiment/fundamental helpers | Public A/HK/US + structure stats | Usually no commercial key |
+| Tonghuashun Financial-API | `financial_api_bridge.py`; A-share bridge with explicit `--source financial_api` | A-share symbols, quotes, daily bars, valuation, financial statements, historical trading dates | `FINANCIAL_API_KEY` |
 | Tencent Finance | `a_stock_data_bridge.py` | A-share quotes/valuation fields | No |
 | Eastmoney | `a_stock_data_bridge.py` (rate-limited) | Sectors / minute flow | No |
 | CNINFO | `a_stock_data_bridge.py` | A-share notices | No |
@@ -363,6 +418,8 @@ Notes:
 | Macro cross-checks (e.g. FRED via docs/AkShare/web) | playbooks + web | Rates / USD cross-checks | Depends on endpoint |
 
 If a source is unavailable: emit `unavailable` / `data_gap` and keep conservative caps — **do not pretend it was fetched**.
+
+The Financial-API adapter preserves missing vendor timestamps, page coverage, and disclosure-date gaps. A successful request does not establish real-time prices or a complete backtest sample. See [Financial-API setup and data semantics](references/financial-api-data-source.md).
 
 ### How to use
 
@@ -430,10 +487,6 @@ python3 -m unittest scripts.test_oss_safety -v
 - Research-only by default; live-trading flags are rejected by the OSS safety layer
 - Secrets via environment / chmod-600 env files only; logs should scrub values
 - See `SECURITY.md`
-
-### Third-party methodology
-
-Some playbooks document clean-room methodology inspired by upstream projects (including Apache-2.0 and AGPL-3.0 sources), marked `methodology_only_no_code_copied`. This repo is MIT overall.
 
 ### License
 

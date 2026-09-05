@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import statistics
 import tempfile
 from datetime import datetime, timezone
@@ -52,7 +53,7 @@ PENDING_TABLE = "calibration_pending_paper_predictions"
 def predicted_win_rate(decision: dict[str, Any]) -> float | None:
     factors = decision.get("factors") or {}
     value = factors.get("estimated_win_rate")
-    if isinstance(value, (int, float)) and 0.0 <= float(value) <= 1.0:
+    if not isinstance(value, bool) and isinstance(value, (int, float)) and 0.0 <= float(value) <= 1.0:
         return float(value)
     return None
 
@@ -66,13 +67,107 @@ def actual_win_label(result: dict[str, Any]) -> int | None:
     return None
 
 
+def is_no_edge_floor(decision: dict[str, Any]) -> bool:
+    """Recognise a structured conviction-floor abstention without guessing from L0 alone."""
+    payload = decision.get("payload") if isinstance(decision.get("payload"), dict) else {}
+    containers = [
+        decision,
+        payload,
+        decision.get("factors") if isinstance(decision.get("factors"), dict) else {},
+        decision.get("scores") if isinstance(decision.get("scores"), dict) else {},
+        payload.get("factors") if isinstance(payload.get("factors"), dict) else {},
+        payload.get("scores") if isinstance(payload.get("scores"), dict) else {},
+    ]
+    for container in containers:
+        if container.get("conviction_floor_passed") is False:
+            return True
+        for key in ("edge_status", "selection_status", "abstention_reason"):
+            value = str(container.get(key) or "").strip().lower().replace("-", "_").replace(" ", "_")
+            if value in {"no_edge", "below_conviction_floor", "no_edge_floor"}:
+                return True
+    reason_text = json.dumps(
+        [decision.get("reasons") or [], payload.get("reasons") or []],
+        ensure_ascii=False,
+    ).lower()
+    return bool(re.search(
+        r"\bno[_ -]?edge\b|below[_ -]?conviction[_ -]?floor|"
+        r"\|vote\|\s*<\s*conviction[_ -]?floor",
+        reason_text,
+    ))
+
+
+def abstention_reason(decision: dict[str, Any], result: dict[str, Any]) -> str | None:
+    """Return a mutually exclusive reason for a predicted candidate not being scored."""
+    if predicted_win_rate(decision) is None:
+        return None
+    if is_no_edge_floor(decision):
+        return "no_edge_floor"
+    outcome = str(result.get("outcome") or "").strip().lower()
+    if outcome in {"mixed", "neutral"}:
+        return "outcome_mixed_neutral"
+    if actual_win_label(result) is None:
+        return "other_unscorable"
+    return None
+
+
+def calibration_denominators(
+    items: list[tuple[dict[str, Any], dict[str, Any]]],
+    paper_candidates: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Disclose the full candidate denominator and mutually exclusive abstentions."""
+    counts = {
+        "no_edge_floor": 0,
+        "outcome_mixed_neutral": 0,
+        "other_unscorable": 0,
+    }
+    candidate_n = 0
+    evaluated_n = 0
+    for decision, result in items:
+        if predicted_win_rate(decision) is None:
+            continue
+        candidate_n += 1
+        reason = abstention_reason(decision, result)
+        if reason is None:
+            evaluated_n += 1
+        else:
+            counts[reason] += 1
+    for pair in paper_candidates or []:
+        predicted = pair.get("predicted")
+        actual = pair.get("actual")
+        if (
+            isinstance(predicted, bool)
+            or not isinstance(predicted, (int, float))
+            or not 0.0 <= float(predicted) <= 1.0
+        ):
+            continue
+        candidate_n += 1
+        if actual in (0, 1) and not isinstance(actual, bool):
+            evaluated_n += 1
+        else:
+            counts["other_unscorable"] += 1
+    abstention_n = candidate_n - evaluated_n
+    abstention_rate = round(abstention_n / candidate_n, 4) if candidate_n else None
+    rates = {
+        reason: (round(count / candidate_n, 4) if candidate_n else None)
+        for reason, count in counts.items()
+    }
+    return {
+        "candidate_n": candidate_n,
+        "evaluated_n": evaluated_n,
+        "abstention_n": abstention_n,
+        "abstention_rate": abstention_rate,
+        "abstention_by_reason": counts,
+        "abstention_rate_by_reason": rates,
+    }
+
+
 def collect_pairs(items: list[tuple[dict[str, Any], dict[str, Any]]], source: str = "skill") -> list[dict[str, Any]]:
     """Pair predicted win rate with realised binary outcome where both exist."""
     pairs: list[dict[str, Any]] = []
     for decision, result in items:
         predicted = predicted_win_rate(decision)
         actual = actual_win_label(result)
-        if predicted is None or actual is None:
+        if predicted is None or actual is None or abstention_reason(decision, result) is not None:
             continue
         pairs.append(
             {
@@ -179,60 +274,74 @@ def prediction_calibration(conn, window: int, min_samples: int) -> dict[str, Any
     }
 
 
+def paper_sample_audit(conn, window: int) -> dict[str, Any]:
+    from paper_outcome_calibration_feed import validate_prediction_contract, net_lifecycle_outcome, lifecycle_module, CONTRACT_FIELD
+    exists = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (PAPER_TABLE,)).fetchone()
+    result = {"total": 0, "eligible": 0, "legacy": 0, "excluded": 0, "excluded_reasons": {}, "pairs": [], "window_candidates": 0, "window_excluded": 0}
+    if not exists:
+        return result
+    rows = conn.execute(f"SELECT * FROM {PAPER_TABLE} ORDER BY outcome_time DESC, recorded_at DESC").fetchall()
+    result["total"] = len(rows)
+    result["window_candidates"] = min(max(window, 0), len(rows))
+    for index, raw in enumerate(rows):
+        row = dict(raw)
+        reason = "eligible"
+        contract = None
+        if "proxy" in str(row.get("prediction_field") or ""):
+            reason = "legacy_score_proxy"
+        else:
+            try:
+                payload = json.loads(row.get("source_payload_json") or "{}")
+                entry = payload.get("entry", {})
+                contract, reason = validate_prediction_contract(entry)
+                if contract:
+                    aggregation = lifecycle_module().aggregate_lifecycles([entry] + payload.get("net_outcome_receipts", []))
+                    complete = aggregation.get("complete_lifecycles") or []
+                    actual, _receipts = net_lifecycle_outcome(complete[0], payload.get("net_outcome_receipts", [])) if len(complete) == 1 else (None, [])
+                    if row.get("prediction_field") != CONTRACT_FIELD or (complete and (row.get("trade_lifecycle_id") != complete[0].get("trade_lifecycle_id") or row.get("outcome_time") != complete[0].get("completed_at"))) or row.get("decision_ref") != entry.get("proposal_id") or row.get("symbol") != entry.get("symbol") or float(row.get("predicted_p")) != contract["p"] or actual is None or actual != row.get("outcome"):
+                        reason = "unverified_sample_contract_or_net_outcome"
+            except (ValueError, TypeError, AttributeError, KeyError):
+                reason = "unverified_sample_payload"
+        if reason != "eligible":
+            result["excluded"] += 1
+            result["window_excluded"] += int(index < window)
+            result["legacy"] += int(reason == "legacy_score_proxy")
+            result["excluded_reasons"][reason] = result["excluded_reasons"].get(reason, 0) + 1
+            continue
+        result["eligible"] += 1
+        if index < window:
+            result["pairs"].append({"predicted": contract["p"], "actual": int(row["outcome"]), "regime": "paper", "direction": "paper", "action_bucket": "paper", "source": "paper", "decision_ref": row["decision_ref"], "symbol": row["symbol"], "horizon_id": contract["horizon_id"], "target": contract["target"], "strategy_version": contract["strategy_version"], "model_version": contract["model_version"]})
+    return result
+
+
 def paper_pairs(conn, window: int) -> tuple[list[dict[str, Any]], int]:
-    """Read isolated System A paper calibration samples.
-
-    Paper samples are advisory-only and never materiality-eligible. Missing table
-    means the feed has not run yet, not an error.
-    """
-    table = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (PAPER_TABLE,)
-    ).fetchone()
-    if not table:
-        return [], 0
-    total = conn.execute(f"SELECT count(*) FROM {PAPER_TABLE}").fetchone()[0]
-    rows = conn.execute(
-        f"SELECT decision_ref, symbol, predicted_p, outcome FROM {PAPER_TABLE} ORDER BY outcome_time DESC, recorded_at DESC LIMIT ?",
-        (window,),
-    ).fetchall()
-    pairs = []
-    for row in rows:
-        pairs.append({
-            "predicted": float(row["predicted_p"]),
-            "actual": int(row["outcome"]),
-            "regime": "paper",
-            "direction": "paper",
-            "action_bucket": "paper",
-            "source": "paper",
-            "decision_ref": row["decision_ref"],
-            "symbol": row["symbol"],
-        })
-    return pairs, int(total)
-
-
+    audit = paper_sample_audit(conn, window)
+    return audit["pairs"], audit["total"]
 
 
 def paper_pending_stats(conn) -> dict[str, int]:
-    """Split pending paper predictions into genuinely awaiting-close vs
-    orphaned (2026-07-26 P0 repair, paper-calibration-loop-stalled-reported-as-pending):
-    an orphaned row's symbol has no position left in the latest broker
-    snapshot and no fill evidence ever closed its lifecycle, so it can never
-    pair -- it must not keep inflating the "awaiting close" count forever.
-    Databases from before the `orphaned` column existed report everything as
-    pending and zero orphaned, rather than erroring.
-    """
-    table = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (PENDING_TABLE,)
-    ).fetchone()
+    from paper_outcome_calibration_feed import validate_prediction_contract
+    result = {"pending": 0, "orphaned": 0, "legacy": 0, "excluded": 0, "settled": 0}
+    table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (PENDING_TABLE,)).fetchone()
     if not table:
-        return {"pending": 0, "orphaned": 0}
-    columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({PENDING_TABLE})").fetchall()}
-    if "orphaned" not in columns:
-        total = int(conn.execute(f"SELECT count(*) FROM {PENDING_TABLE}").fetchone()[0])
-        return {"pending": total, "orphaned": 0}
-    pending = int(conn.execute(f"SELECT count(*) FROM {PENDING_TABLE} WHERE orphaned=0").fetchone()[0])
-    orphaned = int(conn.execute(f"SELECT count(*) FROM {PENDING_TABLE} WHERE orphaned=1").fetchone()[0])
-    return {"pending": pending, "orphaned": orphaned}
+        return result
+    for raw in conn.execute(f"SELECT * FROM {PENDING_TABLE}").fetchall():
+        row = dict(raw)
+        if row.get("settled"):
+            result["settled"] += 1
+            continue
+        try:
+            contract, _reason = validate_prediction_contract(json.loads(row.get("source_payload_json") or "{}"))
+        except (ValueError, TypeError):
+            contract = None
+        if "proxy" in str(row.get("prediction_field") or "") or not contract or contract["p"] != row.get("predicted_p"):
+            result["excluded"] += 1
+            result["legacy"] += int("proxy" in str(row.get("prediction_field") or ""))
+        elif row.get("orphaned"):
+            result["orphaned"] += 1
+        else:
+            result["pending"] += 1
+    return result
 
 
 def brier(pairs: list[dict[str, Any]]) -> float | None:
@@ -350,13 +459,47 @@ def build_scorecard(conn, window: int, min_samples: int, source: str = "skill") 
         paper_pending_total = pending_stats["pending"]
         paper_orphaned_total = pending_stats["orphaned"]
 
+    if source in {"paper", "all"}:
+        audit = paper_sample_audit(conn, window)
+        groups = {}
+        for pair in audit["pairs"]:
+            key = "|".join(pair[k] for k in ("horizon_id", "target", "strategy_version", "model_version"))
+            groups.setdefault(key, []).append(pair)
+        buckets = {key: {"n": len(rows), "brier_score": brier(rows), "reliability_bins": reliability_bins(rows), "calibration_status": "ok" if len(rows) >= min_samples else "insufficient"} for key, rows in groups.items()}
+        result = {
+            "ok": True, "source": source, "materiality_eligible": False,
+            "calibration_status": "insufficient" if not groups else "separate_buckets",
+            "samples_total": audit["total"], "samples_with_prediction": len(audit["pairs"]),
+            "candidate_n": audit["window_candidates"], "evaluated_n": len(audit["pairs"]),
+            "candidate_scope": "stored_paper_samples_in_window",
+            "excluded_n": audit["window_excluded"],
+            "abstention_rate": None, "abstention_reason": "stored_samples_do_not_cover_all_research_candidates_or_no_calls",
+            "paper_samples_total": audit["total"], "paper_eligible_samples": audit["eligible"],
+            "paper_legacy_samples": audit["legacy"], "paper_excluded_samples": audit["excluded"],
+            "paper_excluded_reasons": audit["excluded_reasons"],
+            "paper_pending_predictions": pending_stats["pending"], "paper_orphaned_predictions": pending_stats["orphaned"],
+            "paper_pending_legacy": pending_stats["legacy"], "paper_pending_excluded": pending_stats["excluded"],
+            "paper_pending_settled": pending_stats["settled"], "paper_buckets": buckets,
+            "brier_score": None, "reason": "paper metrics require homogeneous horizon, target and model/strategy version buckets",
+            "calibration_materiality": "none", "drivers": [], "advisory": True,
+            "prediction_ledger": prediction_calibration(conn, window, min_samples),
+            "no_order_execution": True, "min_samples": min_samples,
+        }
+        if source == "all":
+            result["skill_bucket"] = build_scorecard(conn, window, min_samples, source="skill")
+        return result
+
     pairs = skill_pairs + paper_bucket_pairs
+    denominator_disclosure = calibration_denominators(skill_items, paper_bucket_pairs)
     samples_total = (len(skill_items) if source in {"skill", "all"} else 0) + (paper_sample_total if source in {"paper", "all"} else 0)
     samples_with_prediction = len(pairs)
     materiality_eligible = source == "skill"
     ledger_calibration = prediction_calibration(conn, window, min_samples)
     if samples_with_prediction == 0:
-        reason = "no decisions carry factors.estimated_win_rate + a validated outcome" if source == "skill" else "no paper samples carry both an explicit predicted probability and a closed outcome"
+        if denominator_disclosure["candidate_n"] > 0:
+            reason = "no_evaluated_predictions_after_abstention"
+        else:
+            reason = "no decisions carry factors.estimated_win_rate + a validated outcome" if source == "skill" else "no paper samples carry both an explicit predicted probability and a closed outcome"
         return {
             "ok": True,
             "source": source,
@@ -364,6 +507,7 @@ def build_scorecard(conn, window: int, min_samples: int, source: str = "skill") 
             "calibration_status": "insufficient",
             "samples_total": samples_total,
             "samples_with_prediction": 0,
+            **denominator_disclosure,
             "paper_samples_total": paper_sample_total,
             "paper_pending_predictions": paper_pending_total,
             "paper_orphaned_predictions": paper_orphaned_total,
@@ -402,6 +546,7 @@ def build_scorecard(conn, window: int, min_samples: int, source: str = "skill") 
         "calibration_status": "ok" if enough else "insufficient",
         "samples_total": samples_total,
         "samples_with_prediction": samples_with_prediction,
+        **denominator_disclosure,
         "paper_samples_total": paper_sample_total,
         "paper_pending_predictions": paper_pending_total,
         "paper_orphaned_predictions": paper_orphaned_total,
@@ -466,6 +611,8 @@ def self_test() -> dict[str, Any]:
             )
         card = build_scorecard(conn, window=36, min_samples=5, source="skill")
         assert card["samples_with_prediction"] == 10, card
+        assert card["candidate_n"] == 10 and card["evaluated_n"] == 10, card
+        assert card["abstention_rate"] == 0.0, card
         assert card["calibration_gap"] > 0.3, card
         assert card["confidence_posture"] == "overconfident", card
         assert card["calibration_materiality"] == "high", card
@@ -490,9 +637,9 @@ def self_test() -> dict[str, Any]:
         )
         paper_card = build_scorecard(conn, window=36, min_samples=5, source="paper")
         conn.close()
-        assert paper_card["samples_with_prediction"] == 1 and paper_card["materiality_eligible"] is False, paper_card
-        assert paper_card["paper_pending_predictions"] == 1, paper_card
-        assert paper_card["paper_orphaned_predictions"] == 1, paper_card
+        assert paper_card["samples_with_prediction"] == 0 and paper_card["materiality_eligible"] is False, paper_card
+        assert paper_card["paper_pending_predictions"] == 0, paper_card
+        assert paper_card["paper_pending_legacy"] == 2, paper_card
         prediction = {
             "prediction_id": "PR-CAL-1",
             "decision_id": None,

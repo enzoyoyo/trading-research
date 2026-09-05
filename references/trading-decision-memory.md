@@ -246,7 +246,7 @@ python3 scripts/calibration_scorecard.py --source skill --json
 
 ### 外部来源溯源 admission（v2.39）
 
-外部原文、方法论蒸馏或言行交叉验证先过 `scripts/provenance_guard.py`；契约见 `references/source-grounded-research-provenance.md`。
+外部原文、方法论方法研究或言行交叉验证先过 `scripts/provenance_guard.py`；契约见 `references/source-grounded-research-provenance.md`。
 
 - `verified`：只有 `memory_link.accepted_claim_ids` 可作为稳定关联；仍必须有正常 canonical EIDs，并保留原有 `evidence_ids/hypothesis_ids/conflict_ids`，provenance 本身不授予写入资格。
 - `partial`：只记作非 material watch/research note，固定 `materiality_eligible=false`、`valid_for_review=false`，不进入 calibration 或 procedural memory consolidation；可留 accepted stable IDs 供人工刷新，但不得形成 durable claim。

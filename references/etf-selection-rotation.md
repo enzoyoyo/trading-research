@@ -1,5 +1,7 @@
 # ETF Selection & Rotation
 
+> 主落点声明：编译进 `endogenous_structure`；结构质量、流动性与参与者流仍按下文分流。
+
 ## 适用场景
 
 用户问「哪个 ETF 更好」「该不该换仓」「这个行业主题 ETF 现在能不能追」「ETF 还是直接买正股」。不适用于个股选股（走 `method-rotation-matrix.md`）或指数期货/期权对冲（走 `a-share-derivatives-ipo.md` / `options-gamma-structure.md`）。
@@ -41,10 +43,20 @@ ETF vs 个股替代决策的核心问题：**用户想要的是行业 beta 还�
 |---|---|---|---|
 | 费率/跟踪误差/AUM/持仓集中度（结构事实） | `fundamentals` | `etf_structural_quality` | 数据缺口只降级，不阻断；不单独提高 action level |
 | 溢价折价率/流动性/换手率 | `liquidity` | （沿用既有语义，无需新 sub_framework） | 折价率异常扩大只收紧，不作为加仓理由 |
-| 主力净流入/资金流方向 | `participant_flow` | （沿用既有） | 与决策方向一致最多 `confidence += 0.1`；唯一可加分项，不提高 action level（Cap & Tighten-Only Registry） |
+| ETF/基金主力净流入/资金流方向 | `participant_flow` | （沿用既有） | 仅当资金流以 `净流入 / 基金规模` 的相对口径表达、落在自身近 N 期分布的高分位，且与决策方向一致时，最多 `confidence += 0.1`；每次须披露 N 与高分位阈值；唯一可加分项，不提高 action level（Cap & Tighten-Only Registry） |
 | 行业轮动动量/相对强弱 | `endogenous_structure` | `etf_sector_rotation` | 缺同期货 or 期权确认时最高 L1 watch |
 
 清盘风险（规模持续低于阈值 + 折价率持续走阔）视为 `risk_regime` 的 tighten-only 输入，触发时 `holding_directive` 最高收紧到 `REDUCE`，不因流动性尚可就豁免（这是市场风险型 hard veto 集合之一的延伸判断，最终以 `references/decision-compiler.md` Redline Cap 大表当次判定为准）。
+
+ETF/基金资金流加分采用 fail-closed：基金规模沿用上表的 Grok/web_search
+结构性慢变量口径，必须带查询日期，超过 90 天须重查。只有名义净流入、基金规模缺失或
+规模数据过期时，加分不生效，退回中性并记录
+`data_gaps: flow_not_scale_normalized`；不得用名义金额兜底。单期流量事件（n=1）不得用于
+因果归因。
+
+同一行业两只 ETF 的比较中，大基金即使名义净流入更高，只要相对净流入更低，就不能凭
+名义值获得加分；相对净流入更高且满足自身近 N 期高分位阈值的 ETF 才可能获得加分。
+若两只 ETF 都缺 AUM，则两只都不加分。
 
 ## 边界
 

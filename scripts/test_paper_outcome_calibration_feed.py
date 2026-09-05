@@ -73,8 +73,8 @@ class PaperOutcomeLifecycleCalibrationTests(unittest.TestCase):
 
     def test_partial_exits_emit_one_sample_only_after_final_close(self) -> None:
         outcomes = [
-            {"status": "open", "symbol": "ABC.US", "side": "Buy", "proposal_id": "entry-1", "quantity": 100, "timestamp_utc": "2026-01-01T10:00:00Z", "decision_fusion": {"win_rate_proxy": 0.62}},
-            {"status": "partial_closed", "symbol": "ABC.US", "side": "Sell", "proposal_id": "exit-1", "quantity": 40, "r_multiple": "-1", "timestamp_utc": "2026-01-02T10:00:00Z"},
+            {"status": "open", "symbol": "ABC.US", "side": "Buy", "proposal_id": "entry-1", "quantity": 100, "timestamp_utc": "2026-01-01T10:00:00Z", "paper_prediction_contract": {"schema_version": 1, "prediction_id": "synthetic-entry-1", "proposal_id": "entry-1", "symbol": "ABC.US", "p": 0.62, "as_of": "2026-01-01T10:00:00Z", "frozen_at": "2026-01-01T10:00:00Z", "horizon_id": "swing_days", "target": "net_pnl_positive", "settlement": "full_lifecycle", "strategy_version": "synthetic-v1", "model_version": "synthetic-model-v1", "basis": "Synthetic pre-entry forecast fixture, not live evidence", "evidence_refs": ["fixture:prior-training-set"], "probability_kind": "ex_ante_forecast"}},
+            {"status": "partial_closed", "net_pnl": 10, "net_pnl_currency": "USD", "costs_included": True, "cost_evidence_refs": ["fixture:broker-fees"], "symbol": "ABC.US", "side": "Sell", "proposal_id": "exit-1", "quantity": 40, "r_multiple": "-1", "timestamp_utc": "2026-01-02T10:00:00Z"},
             {"status": "reduce_submitted", "symbol": "ABC.US", "side": "Sell", "proposal_id": "exit-unfilled", "quantity": 30, "r_multiple": "99", "timestamp_utc": "2026-01-02T11:00:00Z"},
         ]
         samples, skipped = feed.pair_samples(outcomes, [], {})
@@ -85,7 +85,7 @@ class PaperOutcomeLifecycleCalibrationTests(unittest.TestCase):
         self.assertEqual(skipped["open_not_closed_yet"], 1)
 
         outcomes.append(
-            {"status": "closed", "symbol": "ABC.US", "side": "Sell", "proposal_id": "exit-2", "quantity": 60, "r_multiple": "1", "timestamp_utc": "2026-01-03T10:00:00Z"}
+            {"status": "closed", "net_pnl": 10, "net_pnl_currency": "USD", "costs_included": True, "cost_evidence_refs": ["fixture:broker-fees"], "symbol": "ABC.US", "side": "Sell", "proposal_id": "exit-2", "quantity": 60, "r_multiple": "1", "timestamp_utc": "2026-01-03T10:00:00Z"}
         )
         samples, skipped = feed.pair_samples(outcomes, [], {})
         pending = feed.collect_pending_predictions(outcomes, [], {})
@@ -104,8 +104,8 @@ class PaperOutcomeLifecycleCalibrationTests(unittest.TestCase):
             db_path = root / "must-not-exist.sqlite"
             outcomes_path.write_text(
                 "\n".join([
-                    json.dumps({"status": "open", "symbol": "ABC.US", "side": "Buy", "proposal_id": "entry-1", "quantity": 10, "timestamp_utc": "2026-01-01T10:00:00Z", "decision_fusion": {"win_rate_proxy": 0.62}}),
-                    json.dumps({"status": "closed", "symbol": "ABC.US", "side": "Sell", "proposal_id": "exit-1", "quantity": 10, "r_multiple": "1", "timestamp_utc": "2026-01-02T10:00:00Z"}),
+                    json.dumps({"status": "open", "symbol": "ABC.US", "side": "Buy", "proposal_id": "entry-1", "quantity": 10, "timestamp_utc": "2026-01-01T10:00:00Z", "paper_prediction_contract": {"schema_version": 1, "prediction_id": "synthetic-entry-1", "proposal_id": "entry-1", "symbol": "ABC.US", "p": 0.62, "as_of": "2026-01-01T10:00:00Z", "frozen_at": "2026-01-01T10:00:00Z", "horizon_id": "swing_days", "target": "net_pnl_positive", "settlement": "full_lifecycle", "strategy_version": "synthetic-v1", "model_version": "synthetic-model-v1", "basis": "Synthetic pre-entry forecast fixture, not live evidence", "evidence_refs": ["fixture:prior-training-set"], "probability_kind": "ex_ante_forecast"}}),
+                    json.dumps({"status": "closed", "net_pnl": 10, "net_pnl_currency": "USD", "costs_included": True, "cost_evidence_refs": ["fixture:broker-fees"], "symbol": "ABC.US", "side": "Sell", "proposal_id": "exit-1", "quantity": 10, "r_multiple": "1", "timestamp_utc": "2026-01-02T10:00:00Z"}),
                 ]) + "\n",
                 encoding="utf-8",
             )
@@ -124,7 +124,7 @@ class PaperOutcomeLifecycleCalibrationTests(unittest.TestCase):
 
     def test_unmatched_exit_never_becomes_calibration_sample(self) -> None:
         outcomes = [
-            {"status": "closed", "symbol": "ABC.US", "side": "Sell", "proposal_id": "exit-1", "quantity": 10, "r_multiple": "1", "predicted_p": 0.9, "timestamp_utc": "2026-01-03T10:00:00Z"}
+            {"status": "closed", "net_pnl": 10, "net_pnl_currency": "USD", "costs_included": True, "cost_evidence_refs": ["fixture:broker-fees"], "symbol": "ABC.US", "side": "Sell", "proposal_id": "exit-1", "quantity": 10, "r_multiple": "1", "predicted_p": 0.9, "timestamp_utc": "2026-01-03T10:00:00Z"}
         ]
         samples, skipped = feed.pair_samples(outcomes, [], {})
         self.assertEqual(samples, [])
@@ -188,8 +188,8 @@ class OrphanedPendingPredictionTests(unittest.TestCase):
             outcomes_path.write_text(
                 "\n".join(
                     [
-                        json.dumps({"status": "open", "symbol": "AMD.US", "side": "Buy", "proposal_id": "entry-amd", "quantity": 50, "timestamp_utc": "2026-06-30T10:00:00Z", "decision_fusion": {"win_rate_proxy": 0.55}}),
-                        json.dumps({"status": "open", "symbol": "AAPL.US", "side": "Buy", "proposal_id": "entry-aapl", "quantity": 14, "timestamp_utc": "2026-07-09T10:00:00Z", "decision_fusion": {"win_rate_proxy": 0.6}}),
+                        json.dumps({"status": "open", "symbol": "AMD.US", "side": "Buy", "proposal_id": "entry-amd", "quantity": 50, "timestamp_utc": "2026-06-30T10:00:00Z", "paper_prediction_contract": {"schema_version": 1, "prediction_id": "synthetic-entry-amd", "proposal_id": "entry-amd", "symbol": "AMD.US", "p": 0.62, "as_of": "2026-06-30T10:00:00Z", "frozen_at": "2026-06-30T10:00:00Z", "horizon_id": "swing_days", "target": "net_pnl_positive", "settlement": "full_lifecycle", "strategy_version": "synthetic-v1", "model_version": "synthetic-model-v1", "basis": "Synthetic pre-entry forecast fixture, not live evidence", "evidence_refs": ["fixture:prior-training-set"], "probability_kind": "ex_ante_forecast"}}),
+                        json.dumps({"status": "open", "symbol": "AAPL.US", "side": "Buy", "proposal_id": "entry-aapl", "quantity": 14, "timestamp_utc": "2026-07-09T10:00:00Z", "paper_prediction_contract": {"schema_version": 1, "prediction_id": "synthetic-entry-aapl", "proposal_id": "entry-aapl", "symbol": "AAPL.US", "p": 0.62, "as_of": "2026-07-09T10:00:00Z", "frozen_at": "2026-07-09T10:00:00Z", "horizon_id": "swing_days", "target": "net_pnl_positive", "settlement": "full_lifecycle", "strategy_version": "synthetic-v1", "model_version": "synthetic-model-v1", "basis": "Synthetic pre-entry forecast fixture, not live evidence", "evidence_refs": ["fixture:prior-training-set"], "probability_kind": "ex_ante_forecast"}}),
                     ]
                 )
                 + "\n",
@@ -217,7 +217,7 @@ class OrphanedPendingPredictionTests(unittest.TestCase):
             outcomes_path = root / "journal" / "paper_outcomes.jsonl"
             orders_path = root / "journal" / "paper_orders.jsonl"
             outcomes_path.write_text(
-                json.dumps({"status": "open", "symbol": "XLV.US", "side": "Buy", "proposal_id": "entry-xlv", "quantity": 20, "timestamp_utc": "2026-07-07T10:00:00Z", "decision_fusion": {"win_rate_proxy": 0.5}}) + "\n",
+                json.dumps({"status": "open", "symbol": "XLV.US", "side": "Buy", "proposal_id": "entry-xlv", "quantity": 20, "timestamp_utc": "2026-07-07T10:00:00Z", "paper_prediction_contract": {"schema_version": 1, "prediction_id": "synthetic-entry-xlv", "proposal_id": "entry-xlv", "symbol": "XLV.US", "p": 0.62, "as_of": "2026-07-07T10:00:00Z", "frozen_at": "2026-07-07T10:00:00Z", "horizon_id": "swing_days", "target": "net_pnl_positive", "settlement": "full_lifecycle", "strategy_version": "synthetic-v1", "model_version": "synthetic-model-v1", "basis": "Synthetic pre-entry forecast fixture, not live evidence", "evidence_refs": ["fixture:prior-training-set"], "probability_kind": "ex_ante_forecast"}}) + "\n",
                 encoding="utf-8",
             )
             orders_path.write_text("", encoding="utf-8")
@@ -253,7 +253,7 @@ class OrphanedPendingPredictionTests(unittest.TestCase):
             outcomes_path = root / "paper_outcomes.jsonl"
             orders_path = root / "paper_orders.jsonl"
             outcomes_path.write_text(
-                json.dumps({"status": "open", "symbol": "AMD.US", "side": "Buy", "proposal_id": "entry-amd", "quantity": 50, "timestamp_utc": "2026-06-30T10:00:00Z", "decision_fusion": {"win_rate_proxy": 0.55}}) + "\n",
+                json.dumps({"status": "open", "symbol": "AMD.US", "side": "Buy", "proposal_id": "entry-amd", "quantity": 50, "timestamp_utc": "2026-06-30T10:00:00Z", "paper_prediction_contract": {"schema_version": 1, "prediction_id": "synthetic-entry-amd", "proposal_id": "entry-amd", "symbol": "AMD.US", "p": 0.62, "as_of": "2026-06-30T10:00:00Z", "frozen_at": "2026-06-30T10:00:00Z", "horizon_id": "swing_days", "target": "net_pnl_positive", "settlement": "full_lifecycle", "strategy_version": "synthetic-v1", "model_version": "synthetic-model-v1", "basis": "Synthetic pre-entry forecast fixture, not live evidence", "evidence_refs": ["fixture:prior-training-set"], "probability_kind": "ex_ante_forecast"}}) + "\n",
                 encoding="utf-8",
             )
             orders_path.write_text("", encoding="utf-8")
