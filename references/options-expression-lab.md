@@ -44,7 +44,11 @@ quote_source, quote_asof, bid, ask, bid_size, ask_size
 
 支持标准美国 OCC 合约 ID；ID 根、YYMMDD、C/P、千分之一行权价必须与显式 terms 一致。`expiry` 是准确结算时刻，不能只写日期；`last_trade_at` 是最后可交易时刻，不得在此之后把报价作为新仓研究。两者不可等同推断。`identity_evidence_ref` 应指向已读的交易所/供应商 identity 证据；布尔 `standard_deliverable_verified=true` 必须来自上游核实，本模块不自称验证证据文件。调整合约、未知 deliverable、FLEX 不支持，禁止补默认 multiplier。
 
-所有腿必须同 underlying、结算时刻、right、multiplier、currency、exercise/settlement style 与 session。single 仅 ±1；vertical 两个不同 strike 的 ±1∓1；butterfly 升序 strike 必须等宽且严格 `+1:-2:+1`。SPX 标准产品需额外 `option_root`：SPX 为 AM、SPXW 为 PM，且均 European/cash/100；未知或其他产品须重新实现明确产品合同，不能套此映射。
+所有腿必须同 underlying、结算时刻、right、multiplier、currency、exercise/settlement style 与 session。single 仅 ±1；vertical 两个不同 strike 的 ±1∓1；butterfly 升序 strike 必须等宽且严格 `+1:-2:+1`（即多头蝶式，call 或 put）。
+
+多头蝶式到期价值只在 `0` 到 `翼宽 × multiplier × units` 之间，因此 natural 入场 debit（不含费用）必须严格位于 `(0, 翼宽 × multiplier × units)`：`≤0` 报 `butterfly:natural_debit_not_positive`，`≥` 上限报 `butterfly:natural_debit_not_below_wing_width`，两者均 blocked 且不输出几何。这类报价组合说明逐腿报价不同步或有误，不是无风险套利，也不是“最大亏损 0”。铁蝶（iron butterfly）、断翼蝶（broken wing）与卖出蝶（short butterfly）是不同结构，本模块不支持，不能以 `kind=butterfly` 输入。
+
+合约过期先于报价规则判断：`as_of ≥ expiry` 报 `contract:expired:<contract_id>`，最后交易时刻已过但尚未结算报 `contract:no_longer_trading:<contract_id>`；到期场景因此不晚于 as_of 时，顶层同样报 `contract:expired:…` 而不是 `scenario:not_future`。SPX 标准产品需额外 `option_root`：SPX 为 AM、SPXW 为 PM，且均 European/cash/100；未知或其他产品须重新实现明确产品合同，不能套此映射。
 
 `costs` 必需 `entry_total`、`expiry_total`、`model_exit_total`、`evidence_ref`。三项均为**整个 requested units 的总金额**，不是每股/每腿费用；零只能显式提供并有证据或明确 synthetic 假设，不缺省造零。佣金、交易所费、结算/行权费等应合并到对应总额。真实费用有条件分档而不能化成固定总额时，本版本不支持，需要先形成适用方案或保留 gap。
 
