@@ -1,7 +1,7 @@
 ---
 name: trading-research
 description: Use when the user asks for A/H/US stock, OKX public/read-only or tokenized-stock research, sector, macro, quant/backtest, options/Gamma, ETF, earnings-call, rates/FX/crypto overlay, A-share derivatives, Grok/X/web live signals, portfolio risk, execution supervision, or skill maintenance that must turn evidence into risk-bounded decisions without order execution.
-version: v2.73
+version: v2.74
 ---
 
 # trading-research

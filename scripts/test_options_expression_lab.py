@@ -216,4 +216,89 @@ class OptionsExpressionTests(unittest.TestCase):
             p=fixture();p['candidates'][0]['legs'][0][key]=val;self.assertBlocked(p,error)
 
 
+def xyz_fly(ask95, bid100, ask105, units=1):
+    """XYZ 95/100/105 American call fly, multiplier 100, zero fees: only the natural quotes vary."""
+    legs=[]
+    for strike,qty,bid,ask in [(95,1,ask95-Decimal('0.10'),ask95),(100,-2,bid100,bid100+Decimal('0.10')),(105,1,ask105-Decimal('0.10'),ask105)]:
+        legs.append({'contract_id':f'XYZ261016C{strike*1000:08d}','underlying':'XYZ','expiry':'2026-10-16T20:00:00Z',
+            'last_trade_at':'2026-10-16T20:00:00Z','right':'call','strike':strike,'signed_qty':qty,'multiplier':100,
+            'currency':'USD','exercise_style':'american','settlement_style':'physical','settlement_session':'PM',
+            'standard_deliverable_verified':True,'identity_evidence_ref':'synthetic_identity',
+            'quote_source':'synthetic_fixture','quote_asof':'2026-09-05T12:00:00Z',
+            'bid':str(bid),'ask':str(ask),'bid_size':10,'ask_size':10})
+    return {'as_of':'2026-09-05T12:00:00Z','data_mode':'synthetic',
+        'policy':{'max_quote_age_seconds':60,'max_quote_skew_seconds':2,'max_spread_fraction':0.9},
+        'candidates':[{'id':'xyz','kind':'butterfly','units':units,'legs':legs,
+                       'costs':{'entry_total':0,'expiry_total':0,'model_exit_total':0,'evidence_ref':'synthetic_zero_fee_assumption'}}],
+        'scenarios':[{'id':'body','at':'2026-10-16T20:00:00Z','prices':{'XYZ':100}}]}
+
+
+class LongButterflyRationalityTests(unittest.TestCase):
+    """Natural debit of a long fly must lie strictly inside (0, wing x multiplier x units)."""
+    def gaps(self,p):
+        c=analyze(p)['candidates'][0];return c['readiness'],c['data_gaps'],c
+    def test_net_credit_fly_is_blocked_not_zero_max_loss(self):
+        # Buy 95C@3.00, sell 2x100C@2.60, buy 105C@0.40 -> natural credit 180.
+        readiness,gaps,c=self.gaps(xyz_fly(Decimal('3.00'),Decimal('2.60'),Decimal('0.40')))
+        self.assertEqual(readiness,'blocked',c)
+        self.assertIn('butterfly:natural_debit_not_positive',gaps)
+        self.assertNotIn('expiry_geometry_per_requested_units',c)
+    def test_debit_above_wing_width_is_blocked_not_zero_max_profit(self):
+        # Buy 95C@6.00, sell 2x100C@0.50, buy 105C@0.40 -> natural debit 540 > 5 x 100.
+        readiness,gaps,c=self.gaps(xyz_fly(Decimal('6.00'),Decimal('0.50'),Decimal('0.40')))
+        self.assertEqual(readiness,'blocked',c)
+        self.assertIn('butterfly:natural_debit_not_below_wing_width',gaps)
+        self.assertNotIn('expiry_geometry_per_requested_units',c)
+    def test_debit_equal_to_wing_width_is_blocked(self):
+        readiness,gaps,_=self.gaps(xyz_fly(Decimal('6.00'),Decimal('0.70'),Decimal('0.40')))
+        self.assertIn('butterfly:natural_debit_not_below_wing_width',gaps)
+    def test_normal_debit_fly_keeps_exact_geometry(self):
+        # Buy 95C@6.00, sell 2x100C@2.60, buy 105C@0.40 -> debit 120.
+        readiness,gaps,c=self.gaps(xyz_fly(Decimal('6.00'),Decimal('2.60'),Decimal('0.40')))
+        self.assertEqual(readiness,'hypothesis_only',c)
+        self.assertEqual(Decimal(c['natural_entry_debit']),Decimal('120'))
+        g=c['expiry_geometry_per_requested_units']
+        self.assertEqual(Decimal(g['max_loss']),Decimal('120'));self.assertEqual(Decimal(g['max_profit']),Decimal('380'))
+        self.assertEqual([Decimal(x) for x in g['breakeven_prices']],[Decimal('96.2'),Decimal('103.8')])
+        self.assertIsNone(c['probability_profit']);self.assertIsNone(c['expected_pnl'])
+    def test_ceiling_scales_with_units(self):
+        p=xyz_fly(Decimal('6.00'),Decimal('2.60'),Decimal('0.40'),units=3)
+        c=analyze(p)['candidates'][0]
+        self.assertEqual(c['readiness'],'hypothesis_only',c)
+        self.assertEqual(Decimal(c['natural_entry_debit']),Decimal('360'))
+        self.assertEqual(Decimal(c['expiry_geometry_per_requested_units']['max_profit']),Decimal('1140'))
+    def test_put_fly_uses_same_gate(self):
+        p=xyz_fly(Decimal('0.40'),Decimal('0.50'),Decimal('6.00'))
+        for l in p['candidates'][0]['legs']:
+            l['right']='put';l['contract_id']=l['contract_id'].replace('C0','P0')
+        self.assertIn('butterfly:natural_debit_not_below_wing_width',self.gaps(p)[1])
+
+
+class ExpiryReasonTests(unittest.TestCase):
+    def test_expired_contract_is_named_before_scenario_or_quote_rules(self):
+        p=xyz_fly(Decimal('6.00'),Decimal('2.60'),Decimal('0.40'))
+        p['as_of']='2026-10-19T14:00:00Z'
+        for l in p['candidates'][0]['legs']:l['quote_asof']=p['as_of']
+        r=analyze(p)
+        self.assertEqual(r['readiness'],'blocked')
+        self.assertTrue(r['data_gaps'][0].startswith('contract:expired:XYZ261016C00095000'),r['data_gaps'])
+        self.assertFalse(any('not_future' in g for g in r['data_gaps']))
+    def test_expired_leg_with_future_scenario_is_named_in_candidate(self):
+        p=xyz_fly(Decimal('6.00'),Decimal('2.60'),Decimal('0.40'))
+        p['as_of']='2026-10-16T20:00:00Z'
+        for l in p['candidates'][0]['legs']:l['quote_asof']=p['as_of']
+        p['scenarios'][0]['at']='2026-10-17T20:00:00Z'
+        c=analyze(p)['candidates'][0]
+        self.assertTrue(any(g.startswith('contract:expired:') for g in c['data_gaps']),c)
+    def test_last_trading_time_passed_but_not_settled(self):
+        p=xyz_fly(Decimal('6.00'),Decimal('2.60'),Decimal('0.40'))
+        for l in p['candidates'][0]['legs']:l['last_trade_at']=p['as_of']
+        c=analyze(p)['candidates'][0]
+        self.assertTrue(any(g.startswith('contract:no_longer_trading:') for g in c['data_gaps']),c)
+    def test_past_scenario_without_expired_contract_still_reports_scenario(self):
+        p=xyz_fly(Decimal('6.00'),Decimal('2.60'),Decimal('0.40'))
+        p['scenarios'][0]['at']='2026-09-05T11:00:00Z'
+        self.assertEqual(analyze(p)['data_gaps'],['scenario:not_future'])
+
+
 if __name__=='__main__':unittest.main()

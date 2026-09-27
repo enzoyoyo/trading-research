@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.74
+
+### 修复
+- 期权组合计算：多头蝶式按对价计算的净支出必须位于 (0, 翼宽 × 乘数 × 组数)，否则判为 blocked，不再输出"最大亏损 0"或"最大盈利 0"。看涨、看跌蝶式同一标准。
+- 合约过期先于报价规则判断：已结算报 `contract:expired:<合约>`，已过最后交易时刻报 `contract:no_longer_trading:<合约>`；因合约过期导致的到期情景不再报 `scenario:not_future`。
+
+### 文档与测试
+- 说明铁蝶、断翼蝶、卖出蝶是不同结构，本模块不支持以 `kind=butterfly` 输入。
+- 新增回归测试：净收入蝶式、净支出超过翼宽、等于上限、按组数放大上限、看跌蝶式、正常蝶式几何，以及四个过期原因用例。
+
+### Fixed
+- Option structures: a long butterfly's natural debit must lie in (0, wing × multiplier × units); otherwise it is blocked instead of reporting "max loss 0" or "max profit 0". Call and put flies share the rule.
+- Contract expiry is checked before quote rules: settled contracts report `contract:expired:<id>`, contracts past their last trading time report `contract:no_longer_trading:<id>`; an expiry scenario that is past because the contract expired no longer reports `scenario:not_future`.
+
+### Docs and tests
+- Document that iron, broken-wing, and short butterflies are different structures not accepted as `kind=butterfly`.
+- Regression tests for a net-credit fly, a debit above the wing width, a debit equal to the ceiling, the ceiling scaling with units, a put fly, normal fly geometry, and four expiry-reason cases.
+
 ## v2.73
 
 ### 新增

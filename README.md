@@ -1,6 +1,6 @@
 # trading-research
 
-**v2.73** · [Changelog / 版本变更](CHANGELOG.md)
+**v2.74** · [Changelog / 版本变更](CHANGELOG.md)
 
 [English](#english) · [中文](#中文)
 
@@ -24,6 +24,14 @@ An open-source, **research-only** agent skill that turns multi-market evidence i
 | 结论写完就消失，下次重复踩坑 | 决策记忆、假设注册、预测账本、校准闭环 |
 | 数据源过期或密钥缺失仍硬答 | 缺配置 / 缺证据 fail-closed；日志脱敏，不打印密钥 |
 | 研究工具误变成下单机器人 | 默认 `no_order_execution`；开源安全层拒绝实盘开关 |
+
+### v2.74 新增与改进
+
+- **期权组合计算（多头蝶式）**：按对价计算的净支出必须大于 0 且小于 翼宽 × 乘数 × 组数，否则判为 blocked，不再输出"最大亏损 0"或"最大盈利 0"这类由不同步报价造成的结果；看涨、看跌蝶式同一标准。
+- **过期原因**：合约已结算报 `contract:expired:<合约>`，已过最后交易时刻报 `contract:no_longer_trading:<合约>`，且先于报价规则判断；因合约过期导致的到期情景不再报 `scenario:not_future`。
+- **范围**：铁蝶、断翼蝶、卖出蝶仍不支持，不能以 `kind=butterfly` 输入。对价成本、OCC 与条款对账、报价新鲜度、价差上限、盘口容量与默认不算概率均保持不变。
+
+使用方法见 [期权组合计算](references/options-expression-lab.md)。
 
 ### v2.73 新增与改进
 
@@ -279,6 +287,14 @@ Research chats often produce long narratives without reproducible bounds: stale 
 | One-off answers that never get reviewed | Decision memory, hypothesis registry, prediction ledger, calibration loops |
 | Missing secrets / stale sources still sounding confident | Fail closed; redact secret-like log values |
 | Research helpers turning into order bots | Default `no_order_execution`; OSS safety layer rejects live-trading flags |
+
+### v2.74 additions and improvements
+
+- **Option structures (long butterfly)**: the natural debit must be greater than 0 and less than wing × multiplier × units; otherwise the candidate is blocked instead of showing a "max loss 0" or "max profit 0" produced by out-of-sync quotes. Call and put flies share the rule.
+- **Expiry reasons**: a settled contract reports `contract:expired:<id>` and a contract past its last trading time reports `contract:no_longer_trading:<id>`, both before quote rules; an expiry scenario that is past because the contract expired no longer reports `scenario:not_future`.
+- **Scope**: iron, broken-wing, and short butterflies remain unsupported as `kind=butterfly`. Natural-price cost, OCC/terms reconciliation, quote freshness, spread cap, displayed capacity, and the no-probability default are unchanged.
+
+See the [option structure lab guide](references/options-expression-lab.md).
 
 ### v2.73 additions and improvements
 

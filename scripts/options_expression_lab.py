@@ -142,7 +142,9 @@ def validate_candidate(candidate, payload):
         if l['strike']<=0 or l['multiplier']<=0: raise Gap('identity:nonpositive_strike_multiplier')
         qt=stamp(l['quote_asof'],'quote_asof'); exp=stamp(l['expiry'],'expiry'); lt=stamp(l['last_trade_at'],'last_trade_at')
         if lt>exp: raise Gap('last_trade_at:after_settlement')
-        if now>=lt or now>=exp: raise Gap('expired_or_no_longer_trading')
+        # Expiry is judged before any quote rule so an expired contract is never reported as a stale quote.
+        if now>=exp: raise Gap('contract:expired:'+l['contract_id'])
+        if now>=lt: raise Gap('contract:no_longer_trading:'+l['contract_id'])
         if not 0 <= (now-qt).total_seconds() <= float(age): raise Gap('quote:stale_or_future')
         times.append(qt)
         if l['bid']<0 or l['ask']<=0 or l['ask']<l['bid']: raise Gap('quote:crossed_or_invalid')
@@ -185,7 +187,25 @@ def validate_candidate(candidate, payload):
     fees={k:number(costs.get(k),f'costs.{k}',0) for k in ('entry_total','expiry_total','model_exit_total')}
     required(costs,'evidence_ref')
     debit=sum((l['signed_qty']*l['multiplier']*(l['ask'] if l['signed_qty']>0 else l['bid']) for l in legs),Decimal(0))*units
+    if kind=='butterfly':
+        # A long 1:-2:1 fly pays between 0 and one wing width at expiry, so a natural
+        # debit outside (0, width x multiplier x units) means inconsistent quotes, not an edge.
+        ceiling=(ks[1]-ks[0])*legs[0]['multiplier']*units
+        if debit<=0: raise Gap('butterfly:natural_debit_not_positive')
+        if debit>=ceiling: raise Gap('butterfly:natural_debit_not_below_wing_width')
     return legs, units, cap, debit, fees
+
+
+def expired_contracts(candidates, now):
+    """Contract ids whose settlement time has passed; malformed rows are left to validate_candidate."""
+    found=[]
+    for c in candidates if isinstance(candidates,list) else []:
+        for l in c.get('legs') or [] if isinstance(c,dict) else []:
+            try:
+                if isinstance(l,dict) and stamp(l.get('expiry'),'expiry')<=now: found.append(str(l.get('contract_id')))
+            except Gap:
+                continue
+    return sorted(set(found))
 
 
 def qualified_weights(payload, scenarios):
@@ -321,7 +341,9 @@ def analyze(payload):
         ids=[required(s,'id') for s in scenarios]
         if len(set(ids))!=len(ids): raise Gap('scenarios:duplicate_id')
         for s in scenarios:
-            if stamp(s.get('at'),'scenario.at')<=now: raise Gap('scenario:not_future')
+            if stamp(s.get('at'),'scenario.at')<=now:
+                expired=expired_contracts(payload.get('candidates'),now)
+                raise Gap('contract:expired:'+','.join(expired) if expired else 'scenario:not_future')
         candidates=payload.get('candidates',[])
         if not isinstance(candidates,list) or not candidates: raise Gap('candidates:missing')
         cids=[required(c,'id') for c in candidates]
