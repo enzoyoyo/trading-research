@@ -1,7 +1,7 @@
 ---
 name: trading-research
 description: Use when the user asks for A/H/US stock, OKX public/read-only or tokenized-stock research, sector, macro, quant/backtest, options/Gamma, ETF, earnings-call, rates/FX/crypto overlay, A-share derivatives, Grok/X/web live signals, portfolio risk, execution supervision, or skill maintenance that must turn evidence into risk-bounded decisions without order execution.
-version: v2.71
+version: v2.73
 ---
 
 # trading-research
@@ -45,6 +45,7 @@ version: v2.71
 - A 股公开源补强（腾讯/东财/巨潮）与备用交叉验证 → `a-stock-data-source-layer.md`、`windclaw-a-share-bridge.md`、`a-share-short-term-layer.md`；`a_stock_data_bridge.py`、`windclaw_bridge.py`
 - 同花顺官方 Financial-API（A 股代码/报价/日线/估值/三张财报/历史交易日；仅补证，逐行时间缺失不得当实时）→ `financial-api-data-source.md`；`financial_api_bridge.py`、`test_financial_api_bridge.py`
 - A 股情绪周期专项（涨跌停生态/连板梯队/板块扩散/情绪阶段/资金流状态；仅 A 股短线按需加载）→ `a-share-sentiment-cycle.md`；`a_share_sentiment_cycle.py`
+- **仅 A 股市场盘后/情绪复盘**：按 `references/a-share-post-close-review.md` 采集快照后运行 `scripts/a_share_post_close_review.py`，审查同源三窗口、五日涨停生态及阈值敏感性；模板 `templates/a-share-post-close-review-input.json`，回归 `scripts/test_a_share_post_close_review.py`。港股、美股、OKX、宏观-only、长线基本面和单票买卖不加载；混合市场先拆分。原日级连续流入、数据源、Compiler 与仓位权限不变。
 - 通用数据新鲜度与交易日护栏（as-of 对齐、周末降级、缺失降级）→ `data_freshness_guard.py`
 - 市场结构与风险快照（Gamma/VRP、拥挤/离散度、去杠杆、risk_regime）→ `options-gamma-structure.md`、`leverage-crowding-dispersion-playbook.md`、`deleveraging-liquidity-squeeze-playbook.md`、`semis-index-divergence-overlay.md`；`options_gamma.py`、`dispersion_crowding.py`、`market_structure.py`、`risk_regime_snapshot.py`、`semis_divergence.py`
 - MCP/CLI/SDK/公开源降级链、期权链 delayed fallback、账户门 → `runtime-fallbacks.md`
@@ -208,6 +209,8 @@ python3 scripts/data_retention.py --self-test
 python3 scripts/data_freshness_guard.py --self-test
 python3 scripts/a_share_sentiment_cycle.py --self-test
 python3 -m unittest scripts/test_a_share_sentiment_cycle.py -v
+python3 scripts/a_share_post_close_review.py --input templates/a-share-post-close-review-input.json --pretty
+python3 -m unittest scripts/test_a_share_post_close_review.py -v
 python3 scripts/factor_panel.py --self-test
 python3 scripts/factor_engine.py --self-test
 python3 scripts/factor_backtest.py --self-test
@@ -234,4 +237,4 @@ Paper 校准闭环 pitfall：`paired_samples=0` 不等于「完成」。三种�
 - `trading-research` 是统一投研主 skill；本 skill 无子 skill 目录，Claude Code 只注册顶层本文件。
 - 新能力优先并入 `references/*`、`scripts/*`、`templates/*`，不得新增第二套动作等级或绕过主流程，也不得新建嵌套 `SKILL.md`。
 - System A（LongBridge paper-trading 自动化）的运维 runbook 在 `~/.hermes/longbridge-paper-trading/docs/runbooks/`，不在本 skill 目录内维护。
-- 历史变更见 `README.md`；执行规则以本文件、对应 references、scripts 为准。
+- 版本变更见 `CHANGELOG.md`，能力概览见 `README.md`；执行规则以本文件、对应 references、scripts 为准。

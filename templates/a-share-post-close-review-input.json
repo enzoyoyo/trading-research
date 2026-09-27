@@ -1,0 +1,159 @@
+{
+  "schema_version": "a_share_review_input.v1",
+  "data_kind": "fixture",
+  "market": "A",
+  "intent": "post_close_review",
+  "trade_date": "2026-09-25",
+  "observed_at": "2026-09-25T16:00:00+08:00",
+  "session_phase": "post_close",
+  "session_end_at": "2026-09-25T15:00:00+08:00",
+  "calendar": {
+    "source_ref": "fixture:calendar-not-official",
+    "trading_days": [
+      "2026-09-21",
+      "2026-09-22",
+      "2026-09-23",
+      "2026-09-24",
+      "2026-09-25"
+    ]
+  },
+  "flow_snapshot": {
+    "source": "fixture_vendor",
+    "source_ref": "fixture:raw-sector-snapshot",
+    "data_date": "2026-09-25",
+    "taxonomy": "fixture_industry_v1",
+    "universe_id": "fixture_two_sectors",
+    "unit": "CNY_10K",
+    "non_overlapping_membership": true,
+    "expected_sector_ids": [
+      "fixture-sector-a",
+      "fixture-sector-b"
+    ],
+    "rows": [
+      {
+        "sector_id": "fixture-sector-a",
+        "sector_name": "测试行业甲",
+        "flow_1d": 20000,
+        "flow_5d": 30000,
+        "flow_20d": 40000
+      },
+      {
+        "sector_id": "fixture-sector-b",
+        "sector_name": "测试行业乙",
+        "flow_1d": -10000,
+        "flow_5d": 10000,
+        "flow_20d": -20000
+      }
+    ]
+  },
+  "limit_up_history": [
+    {
+      "trade_date": "2026-09-21",
+      "source": "fixture_limit_vendor",
+      "source_ref": "fixture:daily-limit-pool:2026-09-21",
+      "status": "available",
+      "taxonomy": "fixture_industry_v1",
+      "universe_id": "fixture_limit_universe",
+      "definition_id": "close_sealed_no_st_fixture",
+      "rows": [
+        {
+          "symbol": "000001.SZ",
+          "sector_id": "fixture-sector-a"
+        }
+      ]
+    },
+    {
+      "trade_date": "2026-09-22",
+      "source": "fixture_limit_vendor",
+      "source_ref": "fixture:daily-limit-pool:2026-09-22",
+      "status": "available",
+      "taxonomy": "fixture_industry_v1",
+      "universe_id": "fixture_limit_universe",
+      "definition_id": "close_sealed_no_st_fixture",
+      "rows": [
+        {
+          "symbol": "000001.SZ",
+          "sector_id": "fixture-sector-a"
+        }
+      ]
+    },
+    {
+      "trade_date": "2026-09-23",
+      "source": "fixture_limit_vendor",
+      "source_ref": "fixture:daily-limit-pool:2026-09-23",
+      "status": "available",
+      "taxonomy": "fixture_industry_v1",
+      "universe_id": "fixture_limit_universe",
+      "definition_id": "close_sealed_no_st_fixture",
+      "rows": [
+        {
+          "symbol": "000001.SZ",
+          "sector_id": "fixture-sector-a"
+        }
+      ]
+    },
+    {
+      "trade_date": "2026-09-24",
+      "source": "fixture_limit_vendor",
+      "source_ref": "fixture:daily-limit-pool:2026-09-24",
+      "status": "available",
+      "taxonomy": "fixture_industry_v1",
+      "universe_id": "fixture_limit_universe",
+      "definition_id": "close_sealed_no_st_fixture",
+      "rows": [
+        {
+          "symbol": "000001.SZ",
+          "sector_id": "fixture-sector-a"
+        }
+      ]
+    },
+    {
+      "trade_date": "2026-09-25",
+      "source": "fixture_limit_vendor",
+      "source_ref": "fixture:daily-limit-pool:2026-09-25",
+      "status": "available",
+      "taxonomy": "fixture_industry_v1",
+      "universe_id": "fixture_limit_universe",
+      "definition_id": "close_sealed_no_st_fixture",
+      "rows": [
+        {
+          "symbol": "000001.SZ",
+          "sector_id": "fixture-sector-a"
+        }
+      ]
+    }
+  ],
+  "threshold_checks": [
+    {
+      "name": "fixture_limit_up_count",
+      "value": 63,
+      "threshold": 60,
+      "operator": "ge",
+      "unit": "count",
+      "definition_id": "fixture_same_definition",
+      "source": "fixture_vendor_a",
+      "source_ref": "fixture:primary",
+      "data_date": "2026-09-25",
+      "alternatives": [
+        {
+          "value": 57,
+          "definition_id": "fixture_same_definition",
+          "unit": "count",
+          "source": "fixture_vendor_b",
+          "source_ref": "fixture:alternative",
+          "data_date": "2026-09-25"
+        }
+      ]
+    }
+  ],
+  "leader_observations": [
+    {
+      "symbol": "000001.SZ",
+      "board_height": 6,
+      "one_price_board": true,
+      "turnover_pct": 0.74,
+      "data_date": "2026-09-25",
+      "source_ref": "fixture:leader"
+    }
+  ]
+}

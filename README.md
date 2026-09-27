@@ -1,6 +1,6 @@
 # trading-research
 
-**v2.71**
+**v2.73** · [Changelog / 版本变更](CHANGELOG.md)
 
 [English](#english) · [中文](#中文)
 
@@ -24,6 +24,15 @@ An open-source, **research-only** agent skill that turns multi-market evidence i
 | 结论写完就消失，下次重复踩坑 | 决策记忆、假设注册、预测账本、校准闭环 |
 | 数据源过期或密钥缺失仍硬答 | 缺配置 / 缺证据 fail-closed；日志脱敏，不打印密钥 |
 | 研究工具误变成下单机器人 | 默认 `no_order_execution`；开源安全层拒绝实盘开关 |
+
+### v2.73 新增与改进
+
+- **A 股盘后复盘**：新增本地快照审查命令，检查同源 1/5/20 日资金窗口、五个交易日涨停生态、阈值敏感性与一字板参与度。
+- **统计与数据口径**：分别统计涨停股票日与去重股票数，检查日期、会话时钟、单位、分类及覆盖范围；数据不足保留缺口，不补零、不制造有效分类。
+- **复盘流程**：补充一次采集、本地计算、前次计划逐项验证和次日验证条件的流程说明，并提供离线示例与回归测试。
+- **市场隔离**：仅用于 A 股盘后/情绪复盘；不改变港股、美股、OKX、既有日级连续流入分类、决策编译器或仓位权限。
+
+使用方法见 [A 股盘后复盘](references/a-share-post-close-review.md)。
 
 ### v2.71 功能与优化
 
@@ -110,6 +119,7 @@ An open-source, **research-only** agent skill that turns multi-market evidence i
 | `scripts/options_gamma.py` / `dispersion_crowding.py` | CBOE 期权结构 / 拥挤离散度 |
 | `scripts/factor_panel.py` / `factor_engine.py` / `factor_backtest.py` / `factor_verdict.py` | 因子面板、IC、分位回测与严格裁决 |
 | `scripts/premarket_screen.py` / `a_share_sentiment_cycle.py` / `data_freshness_guard.py` | 盘前筛选、A 股情绪周期与新鲜度护栏 |
+| `scripts/a_share_post_close_review.py` | A 股盘后/情绪复盘的本地数据口径审查；示例数据为 fixture，不联网、不下单 |
 | `scripts/options_positioning_snapshot.py` / `earnings_move_history.py` / `earnings_implied_distribution.py` | 财报期权定位、历史反应与隐含分布 |
 | `scripts/strategy_orchestrator.py` | 美股策略/期限/工具分账、研究路径与原 Compiler 结果汇总 |
 | `scripts/us_mechanism_research.py` | 实际调用事件偏离、条件路径和期权表达计算器，输出版本化研究合同 |
@@ -269,6 +279,15 @@ Research chats often produce long narratives without reproducible bounds: stale 
 | One-off answers that never get reviewed | Decision memory, hypothesis registry, prediction ledger, calibration loops |
 | Missing secrets / stale sources still sounding confident | Fail closed; redact secret-like log values |
 | Research helpers turning into order bots | Default `no_order_execution`; OSS safety layer rejects live-trading flags |
+
+### v2.73 additions and improvements
+
+- **A-share post-close review**: adds a local snapshot checker for same-source 1/5/20-day sector flows, five-session limit-up ecology, threshold sensitivity, and one-price-board participation context.
+- **Data consistency**: distinguishes stock-days from distinct stocks and checks dates, session clocks, units, taxonomies, and coverage. Missing or inconsistent inputs remain explicit gaps instead of zero values or valid classifications.
+- **Review workflow**: documents capture-once/local-compute handling, previous-plan reconciliation, and next-session verification, with offline fixtures and regression tests.
+- **Market isolation**: applies only to A-share post-close/sentiment reviews. HK, US, OKX, existing daily-flow streaks, decision compilation, and position permissions remain unchanged.
+
+See the [A-share post-close review guide](references/a-share-post-close-review.md).
 
 ### v2.71 capabilities and improvements
 
