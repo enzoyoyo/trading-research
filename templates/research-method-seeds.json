@@ -1,0 +1,101 @@
+{
+  "schema_version": "research_method_seeds.v1",
+  "seeds": [
+    {
+      "seed_id": "RESEARCH-H1",
+      "strategy_id": "oversold_reclaim",
+      "market": "US",
+      "status": "train_only",
+      "statement": "预定义流动性美股池中，超卖后实际重夺价格位，在成本后是否优于同状态随机入场。",
+      "falsifiers": [
+        "训练选择冻结后，样本外成本后优势不为正",
+        "重叠事件/幸存者修正后优势消失"
+      ],
+      "probability": null,
+      "net_edge": null,
+      "order_authority": false,
+      "data_gaps": [
+        "no_point_in_time_backtest_inputs",
+        "no_reproducible_strategy_code",
+        "no_verified_broker_costs_or_account_curve"
+      ]
+    },
+    {
+      "seed_id": "RESEARCH-H2",
+      "strategy_id": "momentum_breakout",
+      "market": "US",
+      "status": "train_only",
+      "statement": "美股动量收益是否依赖行业扩散、价量确认和波动状态；必须同时检验反动量对照。",
+      "falsifiers": [
+        "预注册所有状态测试并控制多重检验后不显著",
+        "成本/换手后优势消失"
+      ],
+      "probability": null,
+      "net_edge": null,
+      "order_authority": false,
+      "data_gaps": [
+        "no_point_in_time_backtest_inputs",
+        "no_reproducible_strategy_code",
+        "no_verified_broker_costs_or_account_curve"
+      ]
+    },
+    {
+      "seed_id": "RESEARCH-H3",
+      "strategy_id": "event_followthrough",
+      "market": "US",
+      "status": "train_only",
+      "statement": "明确发行者与事件类型的催化是否在伙伴或同行留下可验证且成本后可交易的相对价格偏差。",
+      "falsifiers": [
+        "leave-one-issuer-out后条件传导不稳定",
+        "以事件前可得信息及自然成交成本衡量后无优势"
+      ],
+      "probability": null,
+      "net_edge": null,
+      "order_authority": false,
+      "data_gaps": [
+        "no_point_in_time_backtest_inputs",
+        "no_reproducible_strategy_code",
+        "no_verified_broker_costs_or_account_curve"
+      ]
+    },
+    {
+      "seed_id": "RESEARCH-H4",
+      "strategy_id": "defensive_relative_strength",
+      "market": "US",
+      "status": "train_only",
+      "statement": "美股风险预算收缩时，前瞻冻结的相对强势候选是否在成本与风险后优于现金或匹配ETF。",
+      "falsifiers": [
+        "matched regime benchmark成本后不优",
+        "候选包含未来名单或事后挑选"
+      ],
+      "probability": null,
+      "net_edge": null,
+      "order_authority": false,
+      "data_gaps": [
+        "no_point_in_time_backtest_inputs",
+        "no_reproducible_strategy_code",
+        "no_verified_broker_costs_or_account_curve"
+      ]
+    },
+    {
+      "seed_id": "RESEARCH-H5",
+      "strategy_id": "interval_calibration",
+      "market": "US",
+      "status": "train_only",
+      "statement": "滚动区间预测的覆盖率与宽度是否优于历史波动基线；其期权表达的净收益须独立验证。",
+      "falsifiers": [
+        "区间只靠更宽而无proper-score改善",
+        "真实期权链/点差/IV变化后净收益不成立"
+      ],
+      "probability": null,
+      "net_edge": null,
+      "order_authority": false,
+      "data_gaps": [
+        "no_point_in_time_backtest_inputs",
+        "no_reproducible_strategy_code",
+        "no_verified_broker_costs_or_account_curve"
+      ]
+    }
+  ],
+  "purpose": "unvalidated_research_questions"
+}

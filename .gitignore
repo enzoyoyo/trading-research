@@ -1,0 +1,48 @@
+# Secrets & local operator config
+.env
+.env.*
+!.env.example
+config.yaml
+config.local.yaml
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*
+*secret*
+
+# Caches, logs, databases, sessions
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.pyc
+*.pyo
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.pid
+*cookie*
+*session*
+.cache/
+.DS_Store
+
+# Local state / trading artifacts (never publish)
+**/paper_orders.jsonl
+**/paper_outcomes.jsonl
+**/paper_position_snapshots.jsonl
+**/decision_packets/
+**/run_logs/
+**/current_run.env
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp

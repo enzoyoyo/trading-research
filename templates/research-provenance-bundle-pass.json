@@ -1,0 +1,67 @@
+{
+  "schema_version": "research_provenance.v1",
+  "as_of": "2026-07-14T00:00:00Z",
+  "source_documents": [
+    {
+      "document_id": "DOC1",
+      "source_type": "primary_document",
+      "title": "Provenance source example",
+      "publisher": "trading-research test fixture",
+      "published_at": "2026-07-14",
+      "original_url": "https://example.com/provenance-source",
+      "local_path": "provenance-source-example.txt",
+      "content_sha256": "6221e870d73f08889ab24929547ccbd8b338e48486edb2bbf264a2c15eafb810",
+      "license_scope": "public",
+      "storage_scope": "tracked_allowed",
+      "redistribution_allowed": "yes"
+    }
+  ],
+  "quote_anchors": [
+    {
+      "quote_id": "Q1",
+      "document_id": "DOC1",
+      "verbatim_text": "Evidence-backed frameworks must remain distinguishable from source facts.",
+      "locator": {
+        "line_start": 1,
+        "line_end": 1
+      },
+      "speaker": "fixture author",
+      "quote_use": "internal_evidence"
+    }
+  ],
+  "framework_claims": [
+    {
+      "framework_claim_id": "FC1",
+      "statement": "Keep source facts and analytical frameworks in separate layers.",
+      "quote_anchor_ids": [
+        "Q1"
+      ],
+      "derivation_note": "The source statement is generalized into a research-governance rule.",
+      "scope": "research_process",
+      "status": "supported",
+      "counterevidence_status": "searched_none_found",
+      "counterevidence_refs": []
+    }
+  ],
+  "analysis_claims": [
+    {
+      "claim_id": "AC1",
+      "statement": "This analysis keeps source facts separate from framework inference.",
+      "provenance_mode": "framework_inference",
+      "source_document_ids": [],
+      "quote_anchor_ids": [],
+      "framework_claim_ids": [
+        "FC1"
+      ],
+      "evidence_refs": [
+        "E1"
+      ],
+      "decision_use": "context_only",
+      "counterevidence_status": "searched_none_found",
+      "counterevidence_refs": [],
+      "falsifier": "The final report presents a framework inference as a direct source fact."
+    }
+  ],
+  "behavior_cross_checks": [],
+  "no_order_execution": true
+}

@@ -1,0 +1,40 @@
+{"query": "帮我看看 TSLA 现在能不能买，给一份美股投研报告", "expect_load": true, "skill": "trading-research", "reason": "美股代码+能不能买+投研"}
+{"query": "300846 今天要不要卖？按A股短线情绪和财报一起看", "expect_load": true, "skill": "trading-research", "reason": "A股代码+买卖决策"}
+{"query": "腾讯 00700 港股怎么看，南向和基本面都分析一下", "expect_load": true, "skill": "trading-research", "reason": "港股代码+基本面/资金"}
+{"query": "收盘后帮我复盘今天A股主线，筛5个明天观察票", "expect_load": true, "skill": "trading-research", "reason": "A股复盘/股池"}
+{"query": "把这篇公众号文章润色成小红书笔记", "expect_load": false, "skill": "trading-research", "reason": "内容改写，应走写作/小红书 skill"}
+{"query": "帮我查附近有什么餐厅", "expect_load": false, "skill": "trading-research", "reason": "地图/生活服务，不是投研"}
+{"query": "生成一个股票主题的SVG logo", "expect_load": false, "skill": "trading-research", "reason": "设计任务，不是股票研究"}
+{"query": "解释一下什么是市盈率，不要分析具体股票", "expect_load": false, "skill": "trading-research", "reason": "概念学习，未请求投研报告/交易决策"}
+{"query": "用Grok全网搜索一下 NVDA 最新消息，再结合 trading-research 判断能不能做多", "expect_load": true, "skill": "trading-research", "reason": "Grok实时搜索+个股交易决策"}
+{"query": "轮动优化 trading-research，让它每次都结合最新资讯和交易体系动态配权", "expect_load": true, "skill": "trading-research", "reason": "明确要求优化本skill动态轮动"}
+{"query": "帮我用Grok搜今天AI供应链最新瓶颈，映射到美股和A股机会", "expect_load": true, "skill": "trading-research", "reason": "Grok+供应链投研+跨市场机会"}
+{"query": "把这张 Gamma Exposure 截图里的 Put Wall / Call Wall 情况加入交易决策，判断 RKLB 能不能接盘", "expect_load": true, "skill": "trading-research", "reason": "期权Gamma结构+具体股票交易决策"}
+{"query": "不要用 grok2api，用 Hermes 里面已登录的 Grok 搜 NVDA 最新消息再做交易判断", "expect_load": true, "skill": "trading-research", "reason": "纠正实时情报源+个股交易决策"}
+{"query": "VIX 暴涨、黄金和指数一起跌、AAPL 暴跌、长端利率飙升、Skew 左偏、指数 GEX 出逃，这波是不是杀杠杆，该不该先降风险", "expect_load": true, "skill": "trading-research", "reason": "系统性风险/杀杠杆/regime 判断，属于投研决策框架"}
+{"query": "帮我修 grok2api 的 cookie 403 问题", "expect_load": false, "skill": "trading-research", "reason": "工具故障修复，应走 Hermes/grok2api 工具维护，不是投研"}
+{"query": "结合 Longbridge 实时行情、IBKR 持仓、宏观和政策，判断 RKLB 现在要不要加仓", "expect_load": true, "skill": "trading-research", "reason": "券商上下文+宏观政策+具体交易决策"}
+{"query": "只帮我查 IBKR API 怎么配置，不分析股票", "expect_load": false, "skill": "trading-research", "reason": "券商API配置维护，不是投研/交易决策"}
+{"query": "用新闻、政策、宏观环境和微观基本面一起判断 00700 的仓位上限", "expect_load": true, "skill": "trading-research", "reason": "完整决策栈+港股仓位判断"}
+{"query": "判断这波 AI 龙头是不是拥挤交易，结合 pair trade、被动资金、ETF 套利、IPO 解禁和 secondary bull 再给仓位方案", "expect_load": true, "skill": "trading-research", "reason": "内生市场结构/拥挤度/发行供给框架"}
+{"query": "用 Hermes Grok 搜 X 上半导体一线从业者对 HBM 交期和先进封装瓶颈的最新说法，但只当线索，必须交叉验证后再判断仓位", "expect_load": true, "skill": "trading-research", "reason": "X/Grok一线情报+半导体供应链+投研决策约束"}
+{"query": "参考 GitHub 高 star 的 OpenBB、Qlib、Freqtrade、Lean、vectorbt，优化 /trading-research 的研究框架和风控边界", "expect_load": true, "skill": "trading-research", "reason": "明确要求维护 trading-research 并参考开源交易研究项目"}
+{"query": "帮我审查这个因子回测能不能作为加仓依据，重点看 walk-forward、成本、容量、回撤和未来函数", "expect_load": true, "skill": "trading-research", "reason": "量化/回测/因子结论用于交易决策，需要稳健性门"}
+{"query": "每天自动自检 trading-research，如果没必要升级就直接说 no_necessary_upgrade，不要乱改", "expect_load": true, "skill": "trading-research", "reason": "明确要求本 skill 自检/自优化机制"}
+{"query": "帮我写一个 Freqtrade 自动交易机器人并直接连交易所下单", "expect_load": false, "skill": "trading-research", "reason": "自动交易/下单实现越过 no_order_execution，应该走开发与交易工具边界审查"}
+{"query":"AAPL 现价多少？只要价格和时间戳","expect_load":true,"skill":"trading-research","tier":"T0","reason":"单纯行情取数，Tier 0 直答"}
+{"query":"我 LongBridge 里 TSLA 持仓现在盈亏多少？不要分析","expect_load":true,"skill":"trading-research","tier":"T0","reason":"持仓/盈亏取数，Tier 0 直答"}
+{"query":"NVDA 现在能不能加一点仓？给速判，不要长报告","expect_load":true,"skill":"trading-research","tier":"T1","reason":"单标的动作判断，Tier 1 速判"}
+{"query":"0700.HK 要不要止盈？结合持仓和风险给一句行动线","expect_load":true,"skill":"trading-research","tier":"T1","reason":"单标的卖出/止盈判断，Tier 1 速判"}
+{"query":"完整复盘 AI 龙头、宏观流动性、期权墙和 X 一线信号，再给下周组合仓位方案","expect_load":true,"skill":"trading-research","tier":"T2","reason":"多维完整研究，Tier 2"}
+{"query":"只问 AAPL 今天是不是美股交易日，不要投资建议","expect_load":true,"skill":"trading-research","tier":"T0","reason":"交易日/交易时段查询，Tier 0"}
+{"query":"AAPL 的股息安全吗？用现金流、派息率和削减风险一起看","expect_load":true,"skill":"trading-research","tier":"T2","reason":"具体股票分红质量与基本面研究"}
+{"query":"找一下今晚美股最热的异动和并购传闻，但传闻必须分可信度","expect_load":true,"skill":"trading-research","tier":"T2","reason":"热点/异动/传闻发现与可信度分流"}
+{"query":"给我的博客做一个多搜索引擎搜索框","expect_load":false,"skill":"trading-research","reason":"网页产品开发，不是投研资讯检索"}
+{"query":"同时扫描 NVDA、TSLA、AAPL 和 00700，先告诉我每只票的行情、公告、新闻和情绪证据覆盖，别让热门票占满抓取预算","expect_load":true,"skill":"trading-research","tier":"T2","reason":"多标的证据覆盖矩阵与公平补抓队列"}
+{"query":"AAPL 突破关键价、财报发布或核心数据恢复后重新研究，给结构化复核触发器，但不要创建定时任务或自动交易","expect_load":true,"skill":"trading-research","tier":"T2","reason":"ResearchWatchTrigger 只触发重研，不产生外部副作用"}
+{"query":"Reddit、X、新闻和 Polymarket 对 TSLA 看法一致吗？不要直接平均不同平台的情绪分","expect_load":true,"skill":"trading-research","tier":"T2","reason":"跨来源 attention metric 量纲、样本与分歧审计"}
+{"query":"核验 OKX 上 XMU-USDT 和 XSKHY-USDT 的产品身份、实时盘口和当前入场评分，再判断能不能做","expect_load":true,"skill":"trading-research","tier":"T2","reason":"OKX tokenized stocks 产品身份+行情+入场决策"}
+{"query":"盯住我 OKX 模拟策略的心跳、持仓、订单、成交和账实对账，断线时保留 stale 值并阻断新仓","expect_load":true,"skill":"trading-research","tier":"T2","reason":"只读执行监督与研究风险门"}
+{"query":"只教我怎么创建和填写 OKX API key，不做任何市场分析","expect_load":false,"skill":"trading-research","reason":"凭据/API 配置维护，不是投研"}
+{"query":"帮我写 OKX 自动交易机器人并直接给 Agent Trade Kit 开下单权限","expect_load":false,"skill":"trading-research","reason":"交易执行实现越过本 skill 的 no_order_execution 边界"}
